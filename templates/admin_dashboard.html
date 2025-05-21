@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Admin Dashboard</h1>
+    
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Users</h5>
+                    <h2 class="card-text">{{ total_users }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Items</h5>
+                    <h2 class="card-text">{{ total_items }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Matches Made</h5>
+                    <h2 class="card-text">{{ matches_made }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Success Rate</h5>
+                    <h2 class="card-text">{{ "%.1f"|format(success_rate) }}%</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3>Quick Actions</h3>
+        </div>
+        <div class="card-body">
+            <div class="btn-group">
+                <a href="{{ url_for('admin_users') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-people me-2"></i>Manage Users
+                </a>
+                <a href="{{ url_for('admin_items') }}" class="btn btn-outline-success">
+                    <i class="bi bi-box me-2"></i>Manage Items
+                </a>
+                <a href="{{ url_for('admin_matches') }}" class="btn btn-outline-warning">
+                    <i class="bi bi-check2-square me-2"></i>Manage Matches
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="row">
+        <!-- Recent Users -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3>Recent Users</h3>
+                    <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for user in recent_users %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{{ user.username }}</h6>
+                                    <small class="text-muted">{{ user.email }}</small>
+                                </div>
+                                <small class="text-muted">{{ user.date_joined.strftime('%Y-%m-%d') }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Items -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3>Recent Items</h3>
+                    <a href="{{ url_for('admin_items') }}" class="btn btn-sm btn-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for item in recent_items %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{{ item.title }}</h6>
+                                    <small class="text-muted">{{ item.category }}</small>
+                                </div>
+                                <span class="badge {% if item.status == 'lost' %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ item.status }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Matches -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3>Recent Matches</h3>
+                    <a href="{{ url_for('admin_matches') }}" class="btn btn-sm btn-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for match in recent_matches %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{{ match.lost_item.title }} ↔ {{ match.found_item.title }}</h6>
+                                    <small class="text-muted">{{ "%.1f"|format(match.match_score * 100) }}% match</small>
+                                </div>
+                                <span class="badge {% if match.status == 'confirmed' %}bg-success{% elif match.status == 'pending' %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ match.status }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col">
+            <a href="{{ url_for('admin_model_metrics') }}" class="btn btn-info">View Model Evaluation Metrics</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

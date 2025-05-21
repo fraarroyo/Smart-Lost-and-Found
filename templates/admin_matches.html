@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Matches - Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Manage Matches</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Matches Management -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3>Matches List</h3>
+                <div class="d-flex gap-2">
+                    <div class="input-group" style="width: 300px;">
+                        <input type="text" class="form-control" id="matchSearch" placeholder="Search matches...">
+                        <button class="btn btn-outline-secondary" type="button" id="searchButton">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-primary {% if status == 'all' %}active{% endif %}" onclick="filterMatches('all')">All</button>
+                        <button class="btn btn-outline-success {% if status == 'confirmed' %}active{% endif %}" onclick="filterMatches('confirmed')">Confirmed</button>
+                        <button class="btn btn-outline-warning {% if status == 'pending' %}active{% endif %}" onclick="filterMatches('pending')">Pending</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Lost Item</th>
+                            <th>Found Item</th>
+                            <th>Match Score</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for match in matches %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('view_item', item_id=match.lost_item.id) }}">
+                                    {{ match.lost_item.title }}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('view_item', item_id=match.found_item.id) }}">
+                                    {{ match.found_item.title }}
+                                </a>
+                            </td>
+                            <td>{{ "%.1f"|format(match.match_score * 100) }}%</td>
+                            <td>
+                                <span class="badge {% if match.status == 'confirmed' %}bg-success{% elif match.status == 'pending' %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ match.status }}
+                                </span>
+                            </td>
+                            <td>{{ match.match_date.strftime('%Y-%m-%d') }}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-success" onclick="confirmMatch('{{ match.id }}')" {% if match.status == 'confirmed' %}disabled{% endif %}>
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="rejectMatch('{{ match.id }}')" {% if match.status == 'rejected' %}disabled{% endif %}>
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-info" onclick="viewMatchDetails('{{ match.id }}')">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmMatch(matchId) {
+    if (confirm('Are you sure you want to confirm this match?')) {
+        fetch(`/admin/matches/${matchId}/confirm`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error confirming match');
+            }
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Error confirming match');
+        });
+    }
+}
+
+function rejectMatch(matchId) {
+    if (confirm('Are you sure you want to reject this match?')) {
+        fetch(`/admin/matches/${matchId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error rejecting match');
+            }
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Error rejecting match');
+        });
+    }
+}
+
+function viewMatchDetails(matchId) {
+    // TODO: Implement match details modal
+    alert('View match details functionality coming soon!');
+}
+
+function filterMatches(status) {
+    window.location.href = "{{ url_for('admin_matches') }}?status=" + status;
+}
+
+// Search functionality
+document.getElementById('searchButton').addEventListener('click', function() {
+    const searchTerm = document.getElementById('matchSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        const lostItem = row.cells[0].textContent.toLowerCase();
+        const foundItem = row.cells[1].textContent.toLowerCase();
+        if (lostItem.includes(searchTerm) || foundItem.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+document.getElementById('matchSearch').addEventListener('keyup', function(event) {
+    if (event.key === 'Enter') {
+        document.getElementById('searchButton').click();
+    }
+});
+</script>
+{% endblock %} 

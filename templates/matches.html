@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Potential Matches - Lost and Found{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-4">Potential Matches</h1>
+            <p class="lead">We found some items that might match your {{ item.status }} item.</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Your Item</h5>
+                    {% if item.image_path %}
+                    <img src="{{ url_for('static', filename=item.image_path) }}" 
+                         class="img-fluid rounded mb-3" 
+                         alt="{{ item.title }}">
+                    {% endif %}
+                    <h6>{{ item.title }}</h6>
+                    <p class="text-muted">{{ item.description }}</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="badge {% if item.status == 'lost' %}bg-danger{% else %}bg-success{% endif %}">
+                            {{ item.status|title }}
+                        </span>
+                        <small class="text-muted">{{ item.category|title }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <h4 class="mb-4">Potential Matches</h4>
+            {% if matches %}
+            <div class="row row-cols-1 row-cols-md-2 g-4">
+                {% for match in matches %}
+                <div class="col">
+                    <div class="card h-100">
+                        {% if match.item.image_path %}
+                        <img src="{{ url_for('static', filename=match.item.image_path) }}" 
+                             class="card-img-top" 
+                             alt="{{ match.item.title }}"
+                             style="height: 200px; object-fit: cover;">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ match.item.title }}</h5>
+                            <p class="card-text">{{ match.item.description }}</p>
+                            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                                <span class="badge bg-primary">Match Score: {{ "%.0f"|format(match.score * 100) }}%</span>
+                                <span class="badge {% if match.item.status == 'lost' %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ match.item.status|title }}
+                                </span>
+                                <span class="badge bg-secondary">{{ match.item.category|title }}</span>
+                                {% if match.item.color %}
+                                <span class="badge bg-info text-dark">{{ match.item.color.title() }}</span>
+                                {% endif %}
+                                {% if match.category_match %}
+                                <span class="badge bg-success">Category Match</span>
+                                {% endif %}
+                                {% if match.color_match %}
+                                <span class="badge bg-success">Color Match</span>
+                                {% endif %}
+                                {% if match.size_match %}
+                                <span class="badge bg-success">Size Match</span>
+                                {% endif %}
+                                {% if match.type_match %}
+                                <span class="badge bg-success">Type Match</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <a href="{{ url_for('view_item', item_id=match.item.id) }}" class="btn btn-primary w-100">View Details</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                No potential matches found at this time. We'll notify you if we find any matches later.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col text-center">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Back to Home</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

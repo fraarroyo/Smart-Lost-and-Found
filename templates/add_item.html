@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Add Item - Lost and Found{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">Report Item</h2>
+                <div class="d-flex justify-content-center mb-4">
+                    <button type="button" id="btnLost" class="btn btn-outline-danger me-2">Lost</button>
+                    <button type="button" id="btnFound" class="btn btn-outline-success">Found</button>
+                </div>
+                <form method="POST" action="{{ url_for('add_item') }}" enctype="multipart/form-data" class="needs-validation" novalidate>
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Item Image</label>
+                        <div class="input-group mb-3">
+                            <span class="input-group-text"><i class="bi bi-image"></i></span>
+                            <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
+                            <div class="invalid-feedback">
+                                Please upload an image of the item.
+                            </div>
+                        </div>
+                        <div id="imagePreviewContainer" class="d-none mb-3">
+                            <img id="imagePreview" src="#" alt="Image preview" class="img-fluid rounded" style="max-height: 300px; width: auto;">
+                        </div>
+                        <div class="form-text">Upload a clear image of the item. The system will automatically analyze, classify, and extract color and size.</div>
+                    </div>
+
+                    <div id="processingIndicator" class="alert alert-info d-none">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span>Processing image and analyzing item...</span>
+                        </div>
+                    </div>
+
+                    <div id="extractedDetails" class="alert alert-success d-none mb-3">
+                        <h5 class="alert-heading">Item Analysis</h5>
+                        <div id="itemAnalysisList"></div>
+                        <!-- <div class="mb-3 mt-3">
+                            <label class="form-label">Description (auto-generated)</label>
+                            <div id="descriptionDisplay" class="border rounded bg-light p-2" style="min-height: 60px;"></div>
+                            <div class="form-text">This description is generated from the image and cannot be edited.</div>
+                        </div> -->
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Category</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-grid"></i></span>
+                            <select class="form-select" id="category" name="category" required>
+                                <option value="">Select a category</option>
+                                <option value="electronics">Electronics</option>
+                                <option value="clothing">Clothing</option>
+                                <option value="accessories">Accessories</option>
+                                <option value="documents">Documents</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Please select a category.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="location" class="form-label" id="locationLabel">Location {{ 'Lost' if status == 'lost' else 'Found' }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                            <input type="text" class="form-control" id="location" name="location" required
+                                   placeholder="Enter the location where the item was {{ 'lost' if status == 'lost' else 'found' }}">
+                            <div class="invalid-feedback">
+                                Please provide the location.
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="status" id="statusInput" value="{{ status }}">
+                    <input type="hidden" name="title" id="itemTitle">
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Submit Report</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const imageInput = document.getElementById('image');
+    const imagePreview = document.getElementById('imagePreview');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const processingIndicator = document.getElementById('processingIndicator');
+    const extractedDetails = document.getElementById('extractedDetails');
+    const itemType = document.getElementById('itemType');
+    const itemTitle = document.getElementById('itemTitle');
+    const categorySelect = document.getElementById('category');
+    const btnLost = document.getElementById('btnLost');
+    const btnFound = document.getElementById('btnFound');
+    const statusInput = document.getElementById('statusInput');
+    const locationLabel = document.getElementById('locationLabel');
+
+    // Form validation
+    form.addEventListener('submit', function(event) {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+    });
+
+    // Image preview
+    imageInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            const file = this.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                imagePreview.src = e.target.result;
+                imagePreviewContainer.classList.remove('d-none');
+            }
+            
+            reader.readAsDataURL(file);
+            
+            // Show processing indicator
+            processingIndicator.classList.remove('d-none');
+            extractedDetails.classList.add('d-none');
+
+            // Create FormData and send to server for processing
+            const formData = new FormData();
+            formData.append('image', file);
+
+            fetch('/process_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Raw response:', response);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Parsed data:', data);
+                processingIndicator.classList.add('d-none');
+
+                // Only show extracted details if items are present
+                if (data.items && data.items.length > 0) {
+                    extractedDetails.classList.remove('d-none');
+                    const itemAnalysisList = document.getElementById('itemAnalysisList');
+                    itemAnalysisList.innerHTML = '';
+                    data.items.forEach((item, idx) => {
+                        itemAnalysisList.innerHTML += `
+                            <div style="margin-bottom: 1em; border-bottom:1px solid #eee;">
+                                <strong>Item ${idx + 1}</strong><br>
+                                <b>Type:</b> ${item.item_type || ''}<br>
+                                <b>Color:</b> ${item.color || ''}<br>
+                                <b>Size:</b> ${item.size || ''}<br>
+                                <b>Description:</b> ${item.description || ''}<br>
+                            </div>
+                        `;
+                    });
+                    // Optionally set the first item's type as the hidden title
+                    itemTitle.value = data.items[0].item_type || '';
+                    // Optionally auto-select the category of the first item
+                    if (data.items[0].category) {
+                        categorySelect.value = data.items[0].category;
+                    }
+                    // Show the detailed description in a display div
+                    document.getElementById('descriptionDisplay').textContent = data.items[0].description || '';
+                } else {
+                    extractedDetails.classList.remove('d-none');
+                    const itemAnalysisList = document.getElementById('itemAnalysisList');
+                    itemAnalysisList.innerHTML = '<i>No items detected.</i>';
+                    itemTitle.value = '';
+                    document.getElementById('descriptionDisplay').textContent = '';
+                }
+            })
+            .catch(error => {
+                console.error('Error in fetch:', error);
+                processingIndicator.classList.add('d-none');
+                // Do not show any alert popup to the user
+            });
+        }
+    });
+
+    function updateStatusButtons(selected) {
+        if (selected === 'lost') {
+            btnLost.classList.add('active', 'btn-danger');
+            btnLost.classList.remove('btn-outline-danger');
+            btnFound.classList.remove('active', 'btn-success');
+            btnFound.classList.add('btn-outline-success');
+            locationLabel.textContent = 'Location Lost';
+        } else {
+            btnFound.classList.add('active', 'btn-success');
+            btnFound.classList.remove('btn-outline-success');
+            btnLost.classList.remove('active', 'btn-danger');
+            btnLost.classList.add('btn-outline-danger');
+            locationLabel.textContent = 'Location Found';
+        }
+    }
+
+    // Set initial state
+    updateStatusButtons(statusInput.value || 'lost');
+
+    btnLost.addEventListener('click', function() {
+        statusInput.value = 'lost';
+        updateStatusButtons('lost');
+    });
+    btnFound.addEventListener('click', function() {
+        statusInput.value = 'found';
+        updateStatusButtons('found');
+    });
+});
+</script>
+{% endblock %} 

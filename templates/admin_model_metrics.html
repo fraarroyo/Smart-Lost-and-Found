@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Model Evaluation Metrics{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Model Evaluation Metrics</h2>
+    <div class="row">
+        <div class="col-md-6">
+            <h4>Classification Metrics</h4>
+            <ul class="list-group mb-4">
+                <li class="list-group-item"><b>Accuracy:</b> {{ metrics.accuracy }}</li>
+                <li class="list-group-item"><b>Precision:</b> {{ metrics.precision }}</li>
+                <li class="list-group-item"><b>Recall:</b> {{ metrics.recall }}</li>
+                <li class="list-group-item"><b>F1 Score:</b> {{ metrics.f1 }}</li>
+                <li class="list-group-item"><b>Mean Average Precision (mAP):</b> {{ metrics.map }}</li>
+                <li class="list-group-item"><b>Intersection over Union (IoU):</b> {{ metrics.iou }}</li>
+            </ul>
+        </div>
+        <div class="col-md-6">
+            <h4>Confusion Matrix</h4>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th></th>
+                        {% for label in metrics.labels %}
+                        <th>{{ label }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in metrics.confusion_matrix %}
+                    <tr>
+                        <th>{{ metrics.labels[loop.index0] }}</th>
+                        {% for value in row %}
+                        <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

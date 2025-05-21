@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Search - Lost and Found{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="display-4">Search Items</h1>
+        <p class="lead">Find lost items or check if someone found your belongings.</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-body">
+                <h5 class="card-title">Search Filters</h5>
+                <form method="GET" action="{{ url_for('search') }}">
+                    <div class="mb-3">
+                        <label for="q" class="form-label">Search Query</label>
+                        <input type="text" class="form-control" id="q" name="q" value="{{ query }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Category</label>
+                        <select class="form-select" id="category" name="category">
+                            <option value="">All Categories</option>
+                            <option value="electronics" {% if category == 'electronics' %}selected{% endif %}>Electronics</option>
+                            <option value="clothing" {% if category == 'clothing' %}selected{% endif %}>Clothing</option>
+                            <option value="accessories" {% if category == 'accessories' %}selected{% endif %}>Accessories</option>
+                            <option value="documents" {% if category == 'documents' %}selected{% endif %}>Documents</option>
+                            <option value="other" {% if category == 'other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="">All Status</option>
+                            <option value="lost" {% if status == 'lost' %}selected{% endif %}>Lost</option>
+                            <option value="found" {% if status == 'found' %}selected{% endif %}>Found</option>
+                        </select>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for item in items %}
+            <div class="col">
+                <div class="card h-100">
+                    {% if item.image_path %}
+                    <img src="{{ url_for('static', filename=item.image_path) }}" class="card-img-top" alt="{{ item.title }}" style="height: 200px; object-fit: cover;">
+                    {% else %}
+                    <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+                        <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
+                    </div>
+                    {% endif %}
+                    <div class="card-body">
+                        <h5 class="card-title">{{ item.title }}</h5>
+                        <p class="card-text">{{ item.description }}</p>
+                        <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                            <span class="badge {% if item.status == 'lost' %}bg-danger{% else %}bg-success{% endif %}">
+                                {{ item.status|title }}
+                            </span>
+                            <span class="badge bg-secondary">{{ item.category|title }}</span>
+                            {% if item.color %}
+                            <span class="badge bg-info text-dark">{{ item.color.title() }}</span>
+                            {% endif %}
+                            <small class="text-muted ms-auto">{{ item.date.strftime('%Y-%m-%d') }}</small>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <a href="{{ url_for('view_item', item_id=item.id) }}" class="btn btn-primary w-100">View Details</a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-12">
+                <div class="alert alert-info">
+                    No items found matching your search criteria.
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %} 
