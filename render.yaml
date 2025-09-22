@@ -2,7 +2,7 @@ services:
   - type: web
     name: smart-lost-and-found
     env: python
-    pythonVersion: 3.11
+    pythonVersion: 3.13
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: gunicorn -w 2 -k gthread -b 0.0.0.0:$PORT app:app
