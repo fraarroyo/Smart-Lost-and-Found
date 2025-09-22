@@ -3192,8 +3192,9 @@ if __name__ == '__main__':
         db.create_all()
         print("✓ Database initialized")
     
-    # Run COCO evaluation on startup
-    run_startup_coco_evaluation()
+    # Skip heavy startup evaluation on Render to open port quickly
+    if not os.environ.get('RENDER', '').lower() in ['true', '1']:
+        run_startup_coco_evaluation()
     
     print("✓ Starting Flask application...")
     print("✓ Admin login: admin / admin123")
