@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: smart-lost-and-found
+    env: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -k gthread -b 0.0.0.0:$PORT app:app
+    envVars:
+      - key: FLASK_SECRET_KEY
+        sync: false
+      - key: BEST_MODEL
+        value: /opt/render/project/src/outputs/best_model.pth

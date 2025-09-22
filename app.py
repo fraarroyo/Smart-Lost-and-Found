@@ -25,7 +25,8 @@ import threading
 import time
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)
+# Use a stable secret key from env if provided; otherwise generate a random one
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 
 # Update database URI to use SQLite
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///lostfound.db'
@@ -3196,5 +3197,6 @@ if __name__ == '__main__':
     
     print("✓ Starting Flask application...")
     print("✓ Admin login: admin / admin123")
-    print("✓ Access at: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    print(f"✓ Access at: http://localhost:{port}")
+    app.run(host='0.0.0.0', port=port)
