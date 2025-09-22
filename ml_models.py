@@ -35,7 +35,8 @@ class UnifiedModel:
         self.object_model.eval()
         
         # Initialize text analysis model
-        self.text_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        # Use slow (pure-Python) tokenizer to avoid building Rust wheels on deployment
+        self.text_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', use_fast=False)
         self.text_model = BertModel.from_pretrained('bert-base-uncased')
         self.text_model.to(self.device)
         self.text_model.eval()
