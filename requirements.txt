@@ -7,7 +7,9 @@ Pillow==10.4.0
 python-dotenv==1.0.0
 torch==2.7.0
 torchvision==0.22.0
-transformers==4.31.0
+transformers==4.45.2
+tokenizers==0.20.1
+safetensors==0.4.5
 numpy==2.0.2
 opencv-python-headless==4.10.0.84
 scikit-learn==1.5.2
