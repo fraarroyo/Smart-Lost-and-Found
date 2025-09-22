@@ -5,7 +5,7 @@ Flask-Migrate==4.0.5
 Werkzeug==2.3.7
 Pillow==10.4.0
 python-dotenv==1.0.0
-torch==2.7.1
+torch==2.7.0
 torchvision==0.22.0
 transformers==4.31.0
 numpy==2.0.2
