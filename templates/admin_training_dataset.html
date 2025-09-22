@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}Training Dataset - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard') }}">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_training') }}">Training</a></li>
+                    <li class="breadcrumb-item active">Training Dataset</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-database"></i> Training Dataset Management</h2>
+                <div>
+                    <form method="POST" action="{{ url_for('admin_add_existing_to_training') }}" class="d-inline">
+                        <button type="submit" class="btn btn-success me-2">
+                            <i class="fas fa-plus"></i> Add Existing Items
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin_add_uploaded_images_to_training') }}" class="d-inline">
+                        <button type="submit" class="btn btn-warning me-2">
+                            <i class="fas fa-images"></i> Add All Uploaded Images
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin_train_with_uploaded_images') }}" class="d-inline">
+                        <button type="submit" class="btn btn-danger me-2">
+                            <i class="fas fa-brain"></i> Train Model with Uploaded Images
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin_export_training_dataset') }}" class="d-inline">
+                        <button type="submit" class="btn btn-info me-2">
+                            <i class="fas fa-download"></i> Export Dataset
+                        </button>
+                    </form>
+                    <a href="{{ url_for('admin_dataset_metrics') }}" class="btn btn-primary me-2">
+                        <i class="fas fa-chart-line"></i> View Metrics
+                    </a>
+                    <a href="{{ url_for('admin_training') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Training
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ dataset_stats.total_samples }}</h4>
+                            <p class="mb-0">Training Samples</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-file-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ dataset_stats.total_images }}</h4>
+                            <p class="mb-0">Training Images</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-images fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ dataset_stats.categories|length }}</h4>
+                            <p class="mb-0">Categories</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-tags fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ "%.1f"|format(dataset_stats.total_images / (dataset_stats.total_samples if dataset_stats.total_samples > 0 else 1) * 100) }}%</h4>
+                            <p class="mb-0">Coverage Rate</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-chart-pie fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Breakdown -->
+    {% if dataset_stats.category_counts %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Images by Category</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for category, count in dataset_stats.category_counts.items() %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card border-primary">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">{{ category.replace('_', ' ').title() }}</h6>
+                                    <h4 class="text-primary">{{ count }}</h4>
+                                    <small class="text-muted">images</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Training Samples -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-history"></i> Recent Training Samples</h5>
+                </div>
+                <div class="card-body">
+                    {% if training_samples %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Item ID</th>
+                                        <th>Category</th>
+                                        <th>Status</th>
+                                        <th>Detected Objects</th>
+                                        <th>Date Added</th>
+                                        <th>Source</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sample in training_samples %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ sample.item_id }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ sample.category.title() }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{ 'success' if sample.status == 'found' else 'danger' }}">
+                                                {{ sample.status }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if sample.detected_objects %}
+                                                {% for obj in sample.detected_objects[:3] %}
+                                                <span class="badge bg-info">{{ obj.class }}</span>
+                                                {% endfor %}
+                                                {% if sample.detected_objects|length > 3 %}
+                                                <span class="badge bg-light">+{{ sample.detected_objects|length - 3 }} more</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">No objects detected</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <small>{{ sample.timestamp.split('T')[0] }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{ 'primary' if sample.source == 'user_upload' else 'secondary' }}">
+                                                {{ sample.source }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No training samples available yet.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Images Gallery -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-images"></i> Training Images Gallery</h5>
+                    <p class="text-muted mb-0">Images organized by category for training</p>
+                </div>
+                <div class="card-body">
+                    {% if dataset_stats.categories %}
+                        <div class="row">
+                            {% for category in dataset_stats.categories %}
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-folder"></i> 
+                                            {{ category.replace('_', ' ').title() }}
+                                            <span class="badge bg-primary float-end">{{ dataset_stats.category_counts[category] }} images</span>
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle"></i>
+                                            <strong>Training Images Location:</strong><br>
+                                            <code>training_data/images/{{ category }}/</code>
+                                        </div>
+                                        <div class="alert alert-success">
+                                            <i class="fas fa-check-circle"></i>
+                                            <strong>Auto-added:</strong> All uploaded items in this category are automatically added to the training dataset.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            No training images found. Upload some items to start building the training dataset.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Information -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-info-circle"></i> How It Works</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-upload text-primary"></i>
+                            <strong>Automatic Addition:</strong> Every uploaded item is automatically added to the training dataset
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-folder text-success"></i>
+                            <strong>Organized Storage:</strong> Images are organized by category in the training_data/images/ directory
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-tags text-info"></i>
+                            <strong>Auto-labeling:</strong> Detected objects are used as initial training labels
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-user-edit text-warning"></i>
+                            <strong>User Feedback:</strong> User corrections improve the training labels over time
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-brain text-danger"></i>
+                            <strong>Model Training:</strong> The dataset is used to retrain and improve the detection model
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-cogs"></i> Dataset Management</h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Dataset Structure:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><code>training_data/</code> - Main training directory</li>
+                            <li><code>training_data/images/</code> - Organized training images</li>
+                            <li><code>training_data/labels/</code> - Training labels and metadata</li>
+                            <li><code>models/</code> - Trained model files</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-success">
+                        <i class="fas fa-download"></i>
+                        <strong>Export Feature:</strong> Download the complete training dataset as a ZIP file for backup or sharing.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.table-responsive {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.badge {
+    font-size: 0.8em;
+}
+</style>
+{% endblock %} 

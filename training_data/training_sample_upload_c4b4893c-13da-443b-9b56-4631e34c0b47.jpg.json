@@ -1,0 +1,75 @@
+{
+  "item_id": "upload_c4b4893c-13da-443b-9b56-4631e34c0b47.jpg",
+  "image_path": "uploads/c4b4893c-13da-443b-9b56-4631e34c0b47.jpg",
+  "detected_objects": [
+    {
+      "class": "cell phone",
+      "confidence": 0.9922648668289185,
+      "original_confidence": 0.9922648668289185,
+      "box": [
+        162.52682495117188,
+        65.76603698730469,
+        530.2613525390625,
+        837.6607055664062
+      ],
+      "color": {
+        "B": 64,
+        "G": 58,
+        "R": 64
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    },
+    {
+      "class": "person",
+      "confidence": 0.9399974942207336,
+      "original_confidence": 0.9399974942207336,
+      "box": [
+        145.1118621826172,
+        271.3974609375,
+        716.5783081054688,
+        908.2463989257812
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "cell phone",
+      "confidence": 0.9922648668289185,
+      "original_confidence": 0.9922648668289185,
+      "box": [
+        162.52682495117188,
+        65.76603698730469,
+        530.2613525390625,
+        837.6607055664062
+      ],
+      "color": {
+        "B": 64,
+        "G": 58,
+        "R": 64
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    },
+    {
+      "class": "person",
+      "confidence": 0.9399974942207336,
+      "original_confidence": 0.9399974942207336,
+      "box": [
+        145.1118621826172,
+        271.3974609375,
+        716.5783081054688,
+        908.2463989257812
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-16T10:51:21.536472",
+  "source": "user_upload"
+}

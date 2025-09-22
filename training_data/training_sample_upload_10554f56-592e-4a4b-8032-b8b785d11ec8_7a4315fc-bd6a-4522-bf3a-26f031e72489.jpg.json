@@ -1,0 +1,35 @@
+{
+  "item_id": "upload_10554f56-592e-4a4b-8032-b8b785d11ec8_7a4315fc-bd6a-4522-bf3a-26f031e72489.jpg",
+  "image_path": "uploads/10554f56-592e-4a4b-8032-b8b785d11ec8_7a4315fc-bd6a-4522-bf3a-26f031e72489.jpg",
+  "detected_objects": [
+    {
+      "class": "suitcase",
+      "confidence": 0.6114223599433899,
+      "original_confidence": 0.6114223599433899,
+      "box": [
+        6.518735885620117,
+        509.37286376953125,
+        881.0574340820312,
+        1133.3740234375
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "suitcase",
+      "confidence": 0.6114223599433899,
+      "original_confidence": 0.6114223599433899,
+      "box": [
+        6.518735885620117,
+        509.37286376953125,
+        881.0574340820312,
+        1133.3740234375
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-16T10:48:35.647099",
+  "source": "user_upload"
+}

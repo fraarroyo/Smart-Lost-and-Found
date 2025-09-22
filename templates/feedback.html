@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Provide Feedback - {{ item.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>Provide Feedback on Detection</h2>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Item: {{ item.title }}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <img src="{{ url_for('static', filename=item.image_path) }}" 
+                                 class="img-fluid rounded" alt="{{ item.title }}">
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Item Details:</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>Category:</strong> {{ item.category }}</li>
+                                <li><strong>Status:</strong> {{ item.status }}</li>
+                                <li><strong>Location:</strong> {{ item.location or 'Not specified' }}</li>
+                                <li><strong>Date:</strong> {{ item.date.strftime('%Y-%m-%d %H:%M') }}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5>Detected Objects</h5>
+                    <p class="text-muted mb-0">Please review the detected objects and provide feedback to help improve our model.</p>
+                </div>
+                <div class="card-body">
+                    <form id="feedbackForm">
+                        {% if detected_objects %}
+                            {% for obj in detected_objects %}
+                            <div class="detection-item mb-4 p-3 border rounded">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h6>Detected: {{ obj.class }}</h6>
+                                        <p class="text-muted">
+                                            Confidence: {{ "%.1f"|format(obj.confidence * 100) }}%
+                                            {% if obj.original_confidence %}
+                                            <br><small>Original: {{ "%.1f"|format(obj.original_confidence * 100) }}%</small>
+                                            {% endif %}
+                                        </p>
+                                        
+                                        <div class="form-group">
+                                            <label>Your Feedback:</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" 
+                                                       name="feedback_{{ loop.index0 }}" 
+                                                       value="correct" id="correct_{{ loop.index0 }}">
+                                                <label class="form-check-label" for="correct_{{ loop.index0 }}">
+                                                    ✅ Correct detection
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" 
+                                                       name="feedback_{{ loop.index0 }}" 
+                                                       value="incorrect" id="incorrect_{{ loop.index0 }}">
+                                                <label class="form-check-label" for="incorrect_{{ loop.index0 }}">
+                                                    ❌ Incorrect detection
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" 
+                                                       name="feedback_{{ loop.index0 }}" 
+                                                       value="partial" id="partial_{{ loop.index0 }}">
+                                                <label class="form-check-label" for="partial_{{ loop.index0 }}">
+                                                    ⚠️ Partially correct
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-group mt-3">
+                                            <label for="confidence_{{ loop.index0 }}">Your confidence rating (0-100%):</label>
+                                            <input type="range" class="form-range" 
+                                                   id="confidence_{{ loop.index0 }}" 
+                                                   min="0" max="100" 
+                                                   value="{{ (obj.confidence * 100) | int }}"
+                                                   oninput="updateConfidenceValue(this)">
+                                            <span class="confidence-value">{{ (obj.confidence * 100) | int }}%</span>
+                                        </div>
+                                        
+                                        <div class="form-group mt-3">
+                                            <label for="correction_{{ loop.index0 }}">Correction (if needed):</label>
+                                            <input type="text" class="form-control" 
+                                                   id="correction_{{ loop.index0 }}" 
+                                                   placeholder="What should it be? (optional)">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        {% if obj.box %}
+                                        <div class="detection-box">
+                                            <small class="text-muted">Detection Box:</small>
+                                            <br>
+                                            <small>X: {{ "%.0f"|format(obj.box[0]) }}, Y: {{ "%.0f"|format(obj.box[1]) }}</small>
+                                            <br>
+                                            <small>Width: {{ "%.0f"|format(obj.box[2] - obj.box[0]) }}, Height: {{ "%.0f"|format(obj.box[3] - obj.box[1]) }}</small>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if obj.color %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Detected Color:</small>
+                                            <br>
+                                            <small>RGB: {{ obj.color.R }}, {{ obj.color.G }}, {{ obj.color.B }}</small>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if obj.features %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Features:</small>
+                                            <br>
+                                            {% for feature in obj.features %}
+                                            <span class="badge bg-info">{{ feature }}</span>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                No objects were detected in this image. If you believe there should be objects detected, please provide feedback below.
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>What objects do you see in this image?</label>
+                                <textarea class="form-control" id="missing_objects" 
+                                          placeholder="Describe the objects you see (e.g., 'black phone', 'red wallet')"></textarea>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="form-group mt-4">
+                            <label for="general_feedback">Additional Comments:</label>
+                            <textarea class="form-control" id="general_feedback" rows="3" 
+                                      placeholder="Any additional feedback about the detection quality, accuracy, or suggestions for improvement..."></textarea>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i> Submit Feedback
+                            </button>
+                            <a href="{{ url_for('view_item', item_id=item.id) }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Item
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-lightbulb"></i> How Your Feedback Helps</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-chart-line text-success"></i>
+                            <strong>Improves Accuracy:</strong> Your feedback helps adjust confidence levels
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-brain text-info"></i>
+                            <strong>Trains the Model:</strong> Corrections help the AI learn from mistakes
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-users text-warning"></i>
+                            <strong>Helps Others:</strong> Better detection for future users
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-cog text-primary"></i>
+                            <strong>Fine-tunes System:</strong> Adjusts thresholds and parameters
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateConfidenceValue(range) {
+    const value = range.value;
+    const display = range.parentElement.querySelector('.confidence-value');
+    display.textContent = value + '%';
+}
+
+document.getElementById('feedbackForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const feedback = [];
+    const detectedObjects = {{ detected_objects | tojson }};
+    
+    // Collect feedback for each detected object
+    detectedObjects.forEach((obj, index) => {
+        const feedbackType = document.querySelector(`input[name="feedback_${index}"]:checked`);
+        const confidence = document.getElementById(`confidence_${index}`).value / 100;
+        const correction = document.getElementById(`correction_${index}`).value;
+        
+        if (feedbackType) {
+            feedback.push({
+                class: obj.class,
+                type: feedbackType.value,
+                confidence: confidence,
+                correction: correction,
+                original_confidence: obj.confidence
+            });
+        }
+    });
+    
+    // Add general feedback
+    const generalFeedback = document.getElementById('general_feedback').value;
+    const missingObjects = document.getElementById('missing_objects')?.value;
+    
+    const feedbackData = {
+        feedback: feedback,
+        general_feedback: generalFeedback,
+        missing_objects: missingObjects
+    };
+    
+    // Submit feedback
+    fetch('{{ url_for("provide_feedback", item_id=item.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(feedbackData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Thank you for your feedback! It will help improve our model.');
+            window.location.href = '{{ url_for("view_item", item_id=item.id) }}';
+        } else {
+            alert('Error submitting feedback. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error submitting feedback. Please try again.');
+    });
+});
+</script>
+
+<style>
+.detection-item {
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.detection-item:hover {
+    background-color: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.confidence-value {
+    font-weight: bold;
+    color: #007bff;
+}
+
+.detection-box {
+    background-color: #e3f2fd;
+    padding: 8px;
+    border-radius: 4px;
+    border-left: 4px solid #2196f3;
+}
+</style>
+{% endblock %} 

@@ -1,0 +1,35 @@
+{
+  "item_id": 4,
+  "image_path": "uploads/72fc444a-f842-4d81-8dcc-09e506f63081.jpg",
+  "detected_objects": [
+    {
+      "class": "suitcase",
+      "confidence": 0.7135778665542603,
+      "box": [
+        14.784249305725098,
+        573.2473754882812,
+        881.8383178710938,
+        1327.6763916015625
+      ],
+      "true_label": "wallet"
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "suitcase",
+      "confidence": 0.7135778665542603,
+      "box": [
+        14.784249305725098,
+        573.2473754882812,
+        881.8383178710938,
+        1327.6763916015625
+      ],
+      "true_label": "wallet"
+    }
+  ],
+  "category": "accessories",
+  "status": "found",
+  "timestamp": "2025-09-16T10:48:09.375914",
+  "source": "user_upload"
+}

@@ -1,0 +1,35 @@
+{
+  "item_id": "upload_c98fab3a-c95b-4b25-9373-c499fbdc6a4b.jpg",
+  "image_path": "uploads/c98fab3a-c95b-4b25-9373-c499fbdc6a4b.jpg",
+  "detected_objects": [
+    {
+      "class": "suitcase",
+      "confidence": 0.6114223599433899,
+      "original_confidence": 0.6114223599433899,
+      "box": [
+        6.518735885620117,
+        509.37286376953125,
+        881.0574340820312,
+        1133.3740234375
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "suitcase",
+      "confidence": 0.6114223599433899,
+      "original_confidence": 0.6114223599433899,
+      "box": [
+        6.518735885620117,
+        509.37286376953125,
+        881.0574340820312,
+        1133.3740234375
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-16T10:51:27.718499",
+  "source": "user_upload"
+}

@@ -1,0 +1,35 @@
+{
+  "item_id": "processed_e22b3341-b70f-4eea-b05e-2c9636b773ec",
+  "image_path": "c:\\Users\\Francis Arroyo\\Documents\\BARYONYX\\static\\uploads\\542db0af-60df-46a1-8da6-e26435262312_479974767_638082888595160_3641662851488319365_n.jpg",
+  "detected_objects": [
+    {
+      "class": "wallet",
+      "confidence": 0.8432681560516357,
+      "original_confidence": 0.8432681560516357,
+      "box": [
+        21.725177764892578,
+        399.0306701660156,
+        881.54541015625,
+        1600.54931640625
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "wallet",
+      "confidence": 0.8432681560516357,
+      "original_confidence": 0.8432681560516357,
+      "box": [
+        21.725177764892578,
+        399.0306701660156,
+        881.54541015625,
+        1600.54931640625
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-20T09:13:21.739398",
+  "source": "user_upload"
+}

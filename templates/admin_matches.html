@@ -97,8 +97,7 @@ function confirmMatch(matchId) {
         fetch(`/admin/matches/${matchId}/confirm`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token() }}'
+                'Content-Type': 'application/json'
             }
         }).then(response => {
             if (response.ok) {
@@ -118,8 +117,7 @@ function rejectMatch(matchId) {
         fetch(`/admin/matches/${matchId}/reject`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token() }}'
+                'Content-Type': 'application/json'
             }
         }).then(response => {
             if (response.ok) {

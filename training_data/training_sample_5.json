@@ -1,0 +1,37 @@
+{
+  "item_id": 5,
+  "image_path": "uploads/d1710beb-126b-401b-af8d-ab0752943ebb.jpg",
+  "detected_objects": [
+    {
+      "class": "mouse",
+      "confidence": 0.8172116279602051,
+      "original_confidence": 0.8172116279602051,
+      "box": [
+        483.7449035644531,
+        145.73928833007812,
+        1770.869140625,
+        1089.760009765625
+      ],
+      "true_label": "mouse"
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "mouse",
+      "confidence": 0.8172116279602051,
+      "original_confidence": 0.8172116279602051,
+      "box": [
+        483.7449035644531,
+        145.73928833007812,
+        1770.869140625,
+        1089.760009765625
+      ],
+      "true_label": "mouse"
+    }
+  ],
+  "category": "other",
+  "status": "lost",
+  "timestamp": "2025-09-16T10:48:09.385904",
+  "source": "user_upload"
+}

@@ -1,0 +1,75 @@
+{
+  "item_id": "processed_6d50e36f-580c-4a0c-97d4-4364157d1b13",
+  "image_path": "C:\\Users\\Francis Arroyo\\Documents\\BARYONYX\\static\\uploads\\d876efbc-78d0-4ed3-a420-3fc873f68c62_480032746_1779920216119895_2225058995560119580_n_1.jpg",
+  "detected_objects": [
+    {
+      "class": "wallet",
+      "confidence": 0.7218601107597351,
+      "original_confidence": 0.7218601107597351,
+      "box": [
+        333.35809326171875,
+        28.65390396118164,
+        1171.8504638671875,
+        1952.173828125
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5915265321731568,
+      "original_confidence": 0.5665265321731567,
+      "box": [
+        422.360595703125,
+        819.910400390625,
+        1096.4765625,
+        1856.29150390625
+      ],
+      "color": {
+        "B": 101,
+        "G": 104,
+        "R": 110
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "wallet",
+      "confidence": 0.7218601107597351,
+      "original_confidence": 0.7218601107597351,
+      "box": [
+        333.35809326171875,
+        28.65390396118164,
+        1171.8504638671875,
+        1952.173828125
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5915265321731568,
+      "original_confidence": 0.5665265321731567,
+      "box": [
+        422.360595703125,
+        819.910400390625,
+        1096.4765625,
+        1856.29150390625
+      ],
+      "color": {
+        "B": 101,
+        "G": 104,
+        "R": 110
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-20T09:35:06.182291",
+  "source": "user_upload"
+}

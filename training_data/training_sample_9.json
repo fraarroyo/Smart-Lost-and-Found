@@ -1,0 +1,55 @@
+{
+  "item_id": 9,
+  "image_path": "uploads/0d2d176e-a5cc-4e6f-a0ac-5e0be866d738.jpg",
+  "detected_objects": [
+    {
+      "class": "cell phone",
+      "confidence": 0.9947916865348816,
+      "original_confidence": 0.9947916865348816,
+      "box": [
+        477.454345703125,
+        655.1293334960938,
+        1014.6292724609375,
+        1632.6016845703125
+      ],
+      "color": {
+        "B": 50,
+        "G": 48,
+        "R": 47
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ],
+      "true_label": "cell phone"
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "cell phone",
+      "confidence": 0.9947916865348816,
+      "original_confidence": 0.9947916865348816,
+      "box": [
+        477.454345703125,
+        655.1293334960938,
+        1014.6292724609375,
+        1632.6016845703125
+      ],
+      "color": {
+        "B": 50,
+        "G": 48,
+        "R": 47
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ],
+      "true_label": "cell phone"
+    }
+  ],
+  "category": "electronics",
+  "status": "lost",
+  "timestamp": "2025-09-16T10:48:09.455015",
+  "source": "user_upload"
+}

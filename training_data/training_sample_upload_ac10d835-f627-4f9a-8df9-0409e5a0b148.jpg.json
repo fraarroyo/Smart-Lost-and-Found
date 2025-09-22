@@ -1,0 +1,137 @@
+{
+  "item_id": "upload_ac10d835-f627-4f9a-8df9-0409e5a0b148.jpg",
+  "image_path": "uploads/ac10d835-f627-4f9a-8df9-0409e5a0b148.jpg",
+  "detected_objects": [
+    {
+      "class": "person",
+      "confidence": 0.9825823307037354,
+      "original_confidence": 0.9825823307037354,
+      "box": [
+        16.83562469482422,
+        382.2063293457031,
+        1301.546142578125,
+        1987.647705078125
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5968499779701233,
+      "original_confidence": 0.5968499779701233,
+      "box": [
+        397.7590637207031,
+        382.82110595703125,
+        1153.5587158203125,
+        1945.02880859375
+      ],
+      "color": {
+        "B": 145,
+        "G": 158,
+        "R": 177
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5635391473770142,
+      "original_confidence": 0.5635391473770142,
+      "box": [
+        461.81060791015625,
+        419.6967468261719,
+        923.9857788085938,
+        949.2291259765625
+      ],
+      "color": {
+        "B": 130,
+        "G": 149,
+        "R": 157
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    },
+    {
+      "class": "person",
+      "confidence": 0.5497812032699585,
+      "original_confidence": 0.5497812032699585,
+      "box": [
+        8.373910903930664,
+        472.4201965332031,
+        497.7769775390625,
+        2018.7652587890625
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "person",
+      "confidence": 0.9825823307037354,
+      "original_confidence": 0.9825823307037354,
+      "box": [
+        16.83562469482422,
+        382.2063293457031,
+        1301.546142578125,
+        1987.647705078125
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5968499779701233,
+      "original_confidence": 0.5968499779701233,
+      "box": [
+        397.7590637207031,
+        382.82110595703125,
+        1153.5587158203125,
+        1945.02880859375
+      ],
+      "color": {
+        "B": 145,
+        "G": 158,
+        "R": 177
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5635391473770142,
+      "original_confidence": 0.5635391473770142,
+      "box": [
+        461.81060791015625,
+        419.6967468261719,
+        923.9857788085938,
+        949.2291259765625
+      ],
+      "color": {
+        "B": 130,
+        "G": 149,
+        "R": 157
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    },
+    {
+      "class": "person",
+      "confidence": 0.5497812032699585,
+      "original_confidence": 0.5497812032699585,
+      "box": [
+        8.373910903930664,
+        472.4201965332031,
+        497.7769775390625,
+        2018.7652587890625
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-16T10:50:52.882068",
+  "source": "user_upload"
+}

@@ -1,0 +1,35 @@
+{
+  "item_id": "processed_1fd4e955-0685-4c8a-82dd-ab291f1f225c",
+  "image_path": "c:\\Users\\Francis Arroyo\\Documents\\BARYONYX\\static\\uploads\\0db5a917-28b1-4fae-8a30-2fe1f55147ce_480359822_2151643758587295_9148551557366705143_n.jpg",
+  "detected_objects": [
+    {
+      "class": "mouse",
+      "confidence": 0.8172116279602051,
+      "original_confidence": 0.8172116279602051,
+      "box": [
+        483.7449035644531,
+        145.73928833007812,
+        1770.869140625,
+        1089.760009765625
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "mouse",
+      "confidence": 0.8172116279602051,
+      "original_confidence": 0.8172116279602051,
+      "box": [
+        483.7449035644531,
+        145.73928833007812,
+        1770.869140625,
+        1089.760009765625
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-20T08:29:50.990262",
+  "source": "user_upload"
+}

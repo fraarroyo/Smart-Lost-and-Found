@@ -24,10 +24,20 @@
                     {% if detected_objects %}
                     <div class="mt-3">
                         <h5>Detected Objects</h5>
+                        {% set relevant_classes = ['cell phone', 'mouse', 'wallet', 'tumbler', 'umbrella'] %}
+                        {% set best_conf = {} %}
+                        {% for obj in detected_objects %}
+                            {% if obj.class.lower() in relevant_classes %}
+                                {% set cls = obj.class.lower() %}
+                                {% if cls not in best_conf or obj.confidence > best_conf[cls] %}
+                                    {% set _ = best_conf.update({cls: obj.confidence}) %}
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
                         <div class="d-flex flex-wrap gap-2">
-                            {% for obj in detected_objects %}
+                            {% for cls, conf in best_conf.items() %}
                             <span class="badge bg-info">
-                                {{ obj.class }} ({{ "%.2f"|format(obj.confidence * 100) }}%)
+                                {{ cls.title() }} ({{ "%.2f"|format(conf * 100) }}%)
                             </span>
                             {% endfor %}
                         </div>
@@ -88,6 +98,11 @@
 
                 <div class="d-grid gap-2">
                     <a href="{{ url_for('similar_items', item_id=item.id) }}" class="btn btn-info">Find Similar Items</a>
+                    {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('provide_feedback', item_id=item.id) }}" class="btn btn-warning">
+                            <i class="fas fa-comment-dots"></i> Provide Feedback
+                        </a>
+                    {% endif %}
                     <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Back to List</a>
                 </div>
             </div>

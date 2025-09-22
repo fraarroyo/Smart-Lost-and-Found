@@ -77,6 +77,12 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="additional_notes" class="form-label">Additional information (optional)</label>
+                        <textarea class="form-control" id="additional_notes" name="additional_notes" rows="3" placeholder="e.g., case color, stickers, identifying marks, passcode hints, etc."></textarea>
+                        <small class="form-text text-muted">Avoid sharing sensitive personal information.</small>
+                    </div>
+
                     <input type="hidden" name="status" id="statusInput" value="{{ status }}">
                     <input type="hidden" name="title" id="itemTitle">
 
@@ -97,7 +103,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const imagePreviewContainer = document.getElementById('imagePreviewContainer');
     const processingIndicator = document.getElementById('processingIndicator');
     const extractedDetails = document.getElementById('extractedDetails');
-    const itemType = document.getElementById('itemType');
     const itemTitle = document.getElementById('itemTitle');
     const categorySelect = document.getElementById('category');
     const btnLost = document.getElementById('btnLost');
@@ -139,12 +144,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                console.log('Raw response:', response);
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                console.log('Parsed data:', data);
                 processingIndicator.classList.add('d-none');
 
                 // Only show extracted details if items are present
@@ -154,7 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     itemAnalysisList.innerHTML = '';
                     data.items.forEach((item, idx) => {
                         itemAnalysisList.innerHTML += `
-                            <div style="margin-bottom: 1em; border-bottom:1px solid #eee;">
+                            <div style=\"margin-bottom: 1em; border-bottom:1px solid #eee;\">
                                 <strong>Item ${idx + 1}</strong><br>
                                 <b>Type:</b> ${item.item_type || ''}<br>
                                 <b>Color:</b> ${item.color || ''}<br>
@@ -169,20 +170,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.items[0].category) {
                         categorySelect.value = data.items[0].category;
                     }
-                    // Show the detailed description in a display div
-                    document.getElementById('descriptionDisplay').textContent = data.items[0].description || '';
                 } else {
                     extractedDetails.classList.remove('d-none');
                     const itemAnalysisList = document.getElementById('itemAnalysisList');
                     itemAnalysisList.innerHTML = '<i>No items detected.</i>';
                     itemTitle.value = '';
-                    document.getElementById('descriptionDisplay').textContent = '';
                 }
             })
             .catch(error => {
                 console.error('Error in fetch:', error);
                 processingIndicator.classList.add('d-none');
-                // Do not show any alert popup to the user
             });
         }
     });

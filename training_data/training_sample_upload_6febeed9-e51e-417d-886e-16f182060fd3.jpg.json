@@ -1,0 +1,97 @@
+{
+  "item_id": "upload_6febeed9-e51e-417d-886e-16f182060fd3.jpg",
+  "image_path": "uploads/6febeed9-e51e-417d-886e-16f182060fd3.jpg",
+  "detected_objects": [
+    {
+      "class": "tie",
+      "confidence": 0.851732611656189,
+      "original_confidence": 0.851732611656189,
+      "box": [
+        29.538997650146484,
+        72.67659759521484,
+        473.9934997558594,
+        2015.3714599609375
+      ]
+    },
+    {
+      "class": "mouse",
+      "confidence": 0.5747430920600891,
+      "original_confidence": 0.5747430920600891,
+      "box": [
+        380.0031433105469,
+        530.1448364257812,
+        1177.8656005859375,
+        1401.5223388671875
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5110135078430176,
+      "original_confidence": 0.5110135078430176,
+      "box": [
+        353.36102294921875,
+        498.14111328125,
+        1188.755615234375,
+        1814.6563720703125
+      ],
+      "color": {
+        "B": 82,
+        "G": 75,
+        "R": 78
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "tie",
+      "confidence": 0.851732611656189,
+      "original_confidence": 0.851732611656189,
+      "box": [
+        29.538997650146484,
+        72.67659759521484,
+        473.9934997558594,
+        2015.3714599609375
+      ]
+    },
+    {
+      "class": "mouse",
+      "confidence": 0.5747430920600891,
+      "original_confidence": 0.5747430920600891,
+      "box": [
+        380.0031433105469,
+        530.1448364257812,
+        1177.8656005859375,
+        1401.5223388671875
+      ]
+    },
+    {
+      "class": "cell phone",
+      "confidence": 0.5110135078430176,
+      "original_confidence": 0.5110135078430176,
+      "box": [
+        353.36102294921875,
+        498.14111328125,
+        1188.755615234375,
+        1814.6563720703125
+      ],
+      "color": {
+        "B": 82,
+        "G": 75,
+        "R": 78
+      },
+      "features": [
+        "dual_camera_detected",
+        "fingerprint_sensor_detected"
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-16T10:49:56.891369",
+  "source": "user_upload"
+}

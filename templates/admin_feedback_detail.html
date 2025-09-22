@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Feedback Detail - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard') }}">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_training') }}">Training</a></li>
+                    <li class="breadcrumb-item active">Feedback Detail</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-comment-dots"></i> Feedback Detail</h2>
+                <div>
+                    <form method="POST" class="d-inline">
+                        <button type="submit" name="action" value="approve" class="btn btn-success me-2">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button type="submit" name="action" value="reject" class="btn btn-danger me-2">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </form>
+                    <a href="{{ url_for('admin_training') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Feedback Information -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> Feedback Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <td><strong>ID:</strong></td>
+                            <td>{{ training_record.id }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>User:</strong></td>
+                            <td>{{ training_record.user.username }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Date:</strong></td>
+                            <td>{{ training_record.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Type:</strong></td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if training_record.feedback_type == 'confirmation' else 'warning' if training_record.feedback_type == 'correction' else 'danger' }}">
+                                    {{ training_record.feedback_type }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Status:</strong></td>
+                            <td>
+                                {% if training_record.is_processed %}
+                                    <span class="badge bg-success">Processed</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if training_record.confidence_adjustment %}
+                        <tr>
+                            <td><strong>Confidence Adjustment:</strong></td>
+                            <td>{{ "%.3f"|format(training_record.confidence_adjustment) }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Original Image -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-image"></i> Original Image</h5>
+                </div>
+                <div class="card-body">
+                    {% if training_record.image_path %}
+                        <img src="{{ url_for('static', filename=training_record.image_path) }}" 
+                             class="img-fluid rounded" alt="Training image">
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> No image available
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detected Objects -->
+    {% if detected_objects %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-eye"></i> Detected Objects</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for obj in detected_objects %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-primary">
+                                <div class="card-header">
+                                    <h6 class="mb-0">{{ obj.class }}</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p><strong>Confidence:</strong> {{ "%.1f"|format(obj.confidence * 100) }}%</p>
+                                            {% if obj.original_confidence %}
+                                            <p><strong>Original:</strong> {{ "%.1f"|format(obj.original_confidence * 100) }}%</p>
+                                            {% endif %}
+                                            {% if obj.box %}
+                                            <p><strong>Box:</strong> {{ "%.0f"|format(obj.box[0]) }}, {{ "%.0f"|format(obj.box[1]) }}, {{ "%.0f"|format(obj.box[2]) }}, {{ "%.0f"|format(obj.box[3]) }}</p>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-md-6">
+                                            {% if obj.color %}
+                                            <p><strong>Color:</strong> RGB({{ obj.color.R }}, {{ obj.color.G }}, {{ obj.color.B }})</p>
+                                            {% endif %}
+                                            {% if obj.features %}
+                                            <p><strong>Features:</strong></p>
+                                            <ul class="list-unstyled">
+                                                {% for feature in obj.features %}
+                                                <li><span class="badge bg-info">{{ feature }}</span></li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- User Feedback -->
+    {% if user_feedback %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-comments"></i> User Feedback</h5>
+                </div>
+                <div class="card-body">
+                    {% for feedback in user_feedback %}
+                    <div class="feedback-item mb-3 p-3 border rounded">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Object: {{ feedback.class }}</h6>
+                                <p><strong>Type:</strong> 
+                                    <span class="badge bg-{{ 'success' if feedback.type == 'correct' else 'danger' if feedback.type == 'incorrect' else 'warning' }}">
+                                        {{ feedback.type }}
+                                    </span>
+                                </p>
+                                <p><strong>User Confidence:</strong> {{ "%.1f"|format(feedback.confidence * 100) }}%</p>
+                                {% if feedback.correction %}
+                                <p><strong>Correction:</strong> {{ feedback.correction }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {% if feedback.original_confidence %}
+                                <p><strong>Original Confidence:</strong> {{ "%.1f"|format(feedback.original_confidence * 100) }}%</p>
+                                {% endif %}
+                                <p><strong>Adjustment:</strong> 
+                                    {% set adjustment = feedback.confidence - feedback.original_confidence %}
+                                    <span class="text-{{ 'success' if adjustment > 0 else 'danger' if adjustment < 0 else 'muted' }}">
+                                        {{ "%.1f"|format(adjustment * 100) }}%
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Training Impact Analysis -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Training Impact Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Confidence Adjustments</h6>
+                            <ul class="list-group">
+                                {% for feedback in user_feedback %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ feedback.class }}
+                                    {% set adjustment = feedback.confidence - feedback.original_confidence %}
+                                    <span class="badge bg-{{ 'success' if adjustment > 0 else 'danger' if adjustment < 0 else 'secondary' }} rounded-pill">
+                                        {{ "%.1f"|format(adjustment * 100) }}%
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Model Learning Potential</h6>
+                            <div class="alert alert-info">
+                                <i class="fas fa-lightbulb"></i>
+                                <strong>This feedback will help:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>Adjust confidence thresholds for {{ user_feedback|length }} object class(es)</li>
+                                    <li>Improve detection accuracy for similar images</li>
+                                    <li>Fine-tune the model's understanding of object boundaries</li>
+                                    <li>Enhance color and feature detection algorithms</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.feedback-item {
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.feedback-item:hover {
+    background-color: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+</style>
+{% endblock %} 

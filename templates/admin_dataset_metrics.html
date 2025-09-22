@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}Dataset Metrics - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard') }}">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_training') }}">Training</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_training_dataset') }}">Dataset</a></li>
+                    <li class="breadcrumb-item active">Metrics</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-chart-line"></i> Training Dataset Metrics</h2>
+                <div>
+                    <a href="{{ url_for('admin_training_dataset') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dataset
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overview Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ dataset_stats.total_samples }}</h4>
+                            <p class="mb-0">Total Samples</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-file-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ dataset_stats.total_images }}</h4>
+                            <p class="mb-0">Training Images</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-images fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ dataset_stats.samples_with_objects }}</h4>
+                            <p class="mb-0">Samples with Objects</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-eye fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ "%.1f"|format(feedback_rate) }}%</h4>
+                            <p class="mb-0">Feedback Rate</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-comments fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Object Detection Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <h6>Total Detected Objects</h6>
+                            <h3 class="text-primary">{{ dataset_stats.total_detected_objects }}</h3>
+                        </div>
+                        <div class="col-6">
+                            <h6>Avg Objects per Sample</h6>
+                            <h3 class="text-success">{{ "%.1f"|format(avg_objects_per_sample) }}</h3>
+                        </div>
+                    </div>
+                    
+                    {% if dataset_stats.confidence_stats.count > 0 %}
+                    <hr>
+                    <h6>Confidence Statistics</h6>
+                    <div class="row">
+                        <div class="col-4">
+                            <small class="text-muted">Average</small>
+                            <div class="h5">{{ "%.3f"|format(dataset_stats.confidence_stats.average) }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Minimum</small>
+                            <div class="h5">{{ "%.3f"|format(dataset_stats.confidence_stats.min) }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Maximum</small>
+                            <div class="h5">{{ "%.3f"|format(dataset_stats.confidence_stats.max) }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-clock"></i> Recent Activity</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <h6>Last 7 Days</h6>
+                            <h3 class="text-info">{{ dataset_stats.recent_activity.last_7_days }}</h3>
+                        </div>
+                        <div class="col-6">
+                            <h6>Last 30 Days</h6>
+                            <h3 class="text-warning">{{ dataset_stats.recent_activity.last_30_days }}</h3>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h6>Source Breakdown</h6>
+                    <div class="row">
+                        {% for source, count in dataset_stats.source_breakdown.items() %}
+                        <div class="col-4">
+                            <small class="text-muted">{{ source.replace('_', ' ').title() }}</small>
+                            <div class="h6">{{ count }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Object Class Distribution -->
+    {% if dataset_stats.object_class_distribution %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-tags"></i> Object Class Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for obj_class, count in dataset_stats.object_class_distribution.items() %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card border-primary">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">{{ obj_class.replace('_', ' ').title() }}</h6>
+                                    <h4 class="text-primary">{{ count }}</h4>
+                                    <small class="text-muted">detections</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Category Distribution -->
+    {% if dataset_stats.category_counts %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-folder"></i> Images by Category</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for category, count in dataset_stats.category_counts.items() %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">{{ category.replace('_', ' ').title() }}</h6>
+                                    <h4 class="text-success">{{ count }}</h4>
+                                    <small class="text-muted">images</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Training Activity -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-history"></i> Recent Training Activity</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_training %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Image Path</th>
+                                        <th>Feedback Type</th>
+                                        <th>User</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for record in recent_training %}
+                                    <tr>
+                                        <td>
+                                            <small>{{ record.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                        </td>
+                                        <td>
+                                            <code>{{ record.image_path[:50] }}{% if record.image_path|length > 50 %}...{% endif %}</code>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{ 'success' if record.feedback_type == 'confirmation' else 'warning' if record.feedback_type == 'correction' else 'danger' }}">
+                                                {{ record.feedback_type }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <small>{{ record.user.username if record.user else 'System' }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{ 'success' if record.is_processed else 'secondary' }}">
+                                                {{ 'Processed' if record.is_processed else 'Pending' }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No recent training activity found.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Insights -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-lightbulb"></i> Performance Insights</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-{{ 'check-circle text-success' if dataset_stats.samples_with_objects > 0 else 'exclamation-triangle text-warning' }}"></i>
+                            <strong>Object Detection:</strong> 
+                            {{ dataset_stats.samples_with_objects }} of {{ dataset_stats.total_samples }} samples have detected objects
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-{{ 'check-circle text-success' if feedback_rate > 10 else 'exclamation-triangle text-warning' }}"></i>
+                            <strong>User Feedback:</strong> 
+                            {{ "%.1f"|format(feedback_rate) }}% of samples have user feedback
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-{{ 'check-circle text-success' if dataset_stats.total_samples > 50 else 'exclamation-triangle text-warning' }}"></i>
+                            <strong>Dataset Size:</strong> 
+                            {{ dataset_stats.total_samples }} training samples available
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-{{ 'check-circle text-success' if dataset_stats.confidence_stats.average > 0.7 else 'exclamation-triangle text-warning' }}"></i>
+                            <strong>Confidence Quality:</strong> 
+                            Average confidence of {{ "%.3f"|format(dataset_stats.confidence_stats.average) }}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-cogs"></i> Recommendations</h6>
+                </div>
+                <div class="card-body">
+                    {% if feedback_rate < 10 %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Low Feedback Rate:</strong> Consider encouraging users to provide feedback on detected objects.
+                    </div>
+                    {% endif %}
+                    
+                    {% if dataset_stats.total_samples < 50 %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Small Dataset:</strong> Upload more items to improve model training.
+                    </div>
+                    {% endif %}
+                    
+                    {% if dataset_stats.confidence_stats.average < 0.7 %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Low Confidence:</strong> Consider retraining the model or improving image quality.
+                    </div>
+                    {% endif %}
+                    
+                    {% if dataset_stats.recent_activity.last_7_days == 0 %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>No Recent Activity:</strong> Consider adding more training data or encouraging user engagement.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.table-responsive {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.badge {
+    font-size: 0.8em;
+}
+
+.alert {
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}

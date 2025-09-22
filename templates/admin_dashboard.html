@@ -58,6 +58,9 @@
                 <a href="{{ url_for('admin_matches') }}" class="btn btn-outline-warning">
                     <i class="bi bi-check2-square me-2"></i>Manage Matches
                 </a>
+                <a href="{{ url_for('admin_training') }}" class="btn btn-outline-info">
+                    <i class="fas fa-brain me-2"></i>Model Training
+                </a>
             </div>
         </div>
     </div>
@@ -146,7 +149,7 @@
 
     <div class="row mb-4">
         <div class="col">
-            <a href="{{ url_for('admin_model_metrics') }}" class="btn btn-info">View Model Evaluation Metrics</a>
+            <!-- Removed link to admin_model_metrics -->
         </div>
     </div>
 </div>

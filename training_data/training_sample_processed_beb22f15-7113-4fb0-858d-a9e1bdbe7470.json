@@ -1,0 +1,35 @@
+{
+  "item_id": "processed_beb22f15-7113-4fb0-858d-a9e1bdbe7470",
+  "image_path": "c:\\Users\\Francis Arroyo\\Documents\\BARYONYX\\static\\uploads\\b8f181b4-6e0a-4a6a-b1f4-71f5d194f36e_22287ab1-066e-4e81-a293-0524b0a1c295.jpg",
+  "detected_objects": [
+    {
+      "class": "tumbler",
+      "confidence": 0.7900773882865906,
+      "original_confidence": 0.7900773882865906,
+      "box": [
+        256.950927734375,
+        101.95787048339844,
+        766.4833984375,
+        1645.5721435546875
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "tumbler",
+      "confidence": 0.7900773882865906,
+      "original_confidence": 0.7900773882865906,
+      "box": [
+        256.950927734375,
+        101.95787048339844,
+        766.4833984375,
+        1645.5721435546875
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "found",
+  "timestamp": "2025-09-20T08:27:36.388932",
+  "source": "user_upload"
+}

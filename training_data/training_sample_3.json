@@ -1,0 +1,35 @@
+{
+  "item_id": 3,
+  "image_path": "uploads/3578a2a1-40af-4709-9d1b-8438a79e3691.jpg",
+  "detected_objects": [
+    {
+      "class": "person",
+      "confidence": 0.9646652936935425,
+      "box": [
+        1485.0244140625,
+        802.17333984375,
+        2350.847412109375,
+        3782.728271484375
+      ],
+      "true_label": "cell phone"
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "person",
+      "confidence": 0.9646652936935425,
+      "box": [
+        1485.0244140625,
+        802.17333984375,
+        2350.847412109375,
+        3782.728271484375
+      ],
+      "true_label": "cell phone"
+    }
+  ],
+  "category": "electronics",
+  "status": "found",
+  "timestamp": "2025-09-16T10:48:09.352953",
+  "source": "user_upload"
+}
