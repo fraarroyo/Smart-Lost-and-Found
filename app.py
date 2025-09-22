@@ -1368,6 +1368,10 @@ def add_item():
 
             if created_matches > 0:
                 flash(f'Automatically found {created_matches} potential match(es).', 'success')
+            else:
+                # No auto-matches found; guide user to manual/assisted matching
+                flash('No automatic matches found. Showing similar items you can review.', 'info')
+                return redirect(url_for('similar_items', item_id=item.id))
 
             flash('Item added successfully!')
             return redirect(url_for('index'))
