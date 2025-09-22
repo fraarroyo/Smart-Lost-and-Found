@@ -151,6 +151,24 @@ ALLOWED_CLASSES = {
     "phone", "mobile", "cell phone", "cellphone", "smartphone", "computer mouse", "mouse", "wallet", "eyeglasses", "eye glasses", "glasses", "spectacles", "id card", "id", "identity card", "tumbler", "tablet", "ipad", "bottle", "umbrella", "wrist watch", "watch", "usb", "flash drive", "thumb drive", "pen drive"
 }
 
+def normalize_class_name(name: str) -> str:
+    """Normalize detector class names to canonical forms used by the UI filters.
+    Examples: 'mobile_phone' -> 'cell phone', 'cellphone' -> 'cell phone'.
+    """
+    if not name:
+        return ''
+    n = str(name).strip().lower().replace('_', ' ').replace('-', ' ')
+    synonyms = {
+        'mobile phone': 'cell phone',
+        'cellphone': 'cell phone',
+        'smart phone': 'smartphone',
+        'eye glasses': 'eyeglasses',
+        'identity card': 'id card',
+        'thumbdrive': 'thumb drive',
+        'pendrive': 'pen drive',
+    }
+    return synonyms.get(n, n)
+
 def classify_item(detected_objects):
     """Classify multiple items based on detected objects and suggest categories."""
     if not detected_objects:
@@ -920,7 +938,7 @@ def process_image():
         except:
             pass
         for obj in detected_objects:
-            obj_class = obj.get('class', '').lower()
+            obj_class = normalize_class_name(obj.get('class', ''))
             # Size-based filter for phones: skip if bounding box is very small
             if obj_class in ["phone", "mobile", "cell phone", "cellphone", "smartphone"] and 'box' in obj and image_area:
                 x1, y1, x2, y2 = map(int, obj['box'])
@@ -931,12 +949,14 @@ def process_image():
             if obj_class == 'tv':
                 continue
             if obj_class in ALLOWED_CLASSES:
+                # Write back normalized name so downstream UI gets canonical labels
+                obj['class'] = obj_class
                 filtered_objects.append(obj)
         # Process only the detected item with the highest confidence
         if filtered_objects:
             best_obj = max(filtered_objects, key=lambda x: x['confidence'])
             obj = best_obj
-            obj_class = obj.get('class', '').lower()
+            obj_class = normalize_class_name(obj.get('class', ''))
             box = obj.get('box')
             # Heuristic: If class is 'tv' and bounding box is small, relabel as 'phone'
             if obj_class == 'tv' and box:
