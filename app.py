@@ -70,8 +70,10 @@ except ImportError:
         def process(self, sequence):
             return []
 
-# Force unified model to use the specified best model checkpoint
-os.environ['BEST_MODEL'] = r'C:\Users\Francis Arroyo\Documents\BARYONYX\outputs\best_model.pth'
+# Force the whole system to use the COCO web detector instead of any local .pth
+os.environ['USE_WEB_DETECTOR'] = 'true'
+# Optional: clear BEST_MODEL so loaders don't consider a local checkpoint
+os.environ.pop('BEST_MODEL', None)
 
 # Initialize unified ML model
 try:
