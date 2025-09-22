@@ -20,10 +20,13 @@ static/img/generated/
 models/*
 !models/*.md
 *.pth
+# Allow outputs directory and its contents to be committed
+!outputs/**
+!outputs/*.pth
 *.pt
 *.onnx
-outputs/
-!outputs/*.md
+# Allow committing outputs (models, reports)
+!outputs/**
 coco_evaluation_*.json
 training_data/images/
 training_data/*.zip
