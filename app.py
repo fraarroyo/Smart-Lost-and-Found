@@ -49,7 +49,7 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 # For PythonAnywhere, use absolute path to avoid permission issues
 if os.environ.get('PYTHONANYWHERE_DOMAIN'):
     # Running on PythonAnywhere
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////home/fraarroyo/mysite/lostfound.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////home/smartlostandfound/mysite/lostfound.db'
 else:
     # Running locally
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///lostfound.db'

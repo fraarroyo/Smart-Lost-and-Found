@@ -18,9 +18,9 @@ This guide will help you deploy your BARYONYX Lost and Found Management System t
 6. Click **Next**
 
 ### 1.2 Configure the Web App
-- **Source code**: `/home/fraarroyo/mysite`
-- **Working directory**: `/home/fraarroyo/mysite`
-- **WSGI file**: `/home/fraarroyo/mysite/wsgi.py`
+- **Source code**: `/home/smartlostandfound/mysite`
+- **Working directory**: `/home/smartlostandfound/mysite`
+- **WSGI file**: `/home/smartlostandfound/mysite/wsgi.py`
 
 ## Step 2: Upload Your Code
 
@@ -28,14 +28,30 @@ This guide will help you deploy your BARYONYX Lost and Found Management System t
 In the PythonAnywhere **Consoles** tab, open a Bash console and run:
 
 ```bash
-cd /home/fraarroyo
+cd /home/smartlostandfound
 git clone https://github.com/fraarroyo/Smart-Lost-and-Found.git mysite
 cd mysite
 ```
 
-### 2.2 Install Dependencies
+### 2.2 Create Virtual Environment
 ```bash
-pip3.10 install --user -r requirements_pythonanywhere.txt
+# Create virtual environment
+python3.10 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Upgrade pip
+pip install --upgrade pip
+```
+
+### 2.3 Install Dependencies
+```bash
+# Make sure virtual environment is activated
+source venv/bin/activate
+
+# Install requirements
+pip install -r requirements_pythonanywhere.txt
 ```
 
 **Note**: Some packages like `pycocotools` might need manual installation or may not be available. The app will work without them.
@@ -65,21 +81,24 @@ In the **Web** tab, set up static files mapping:
 
 | URL | Directory |
 |-----|-----------|
-| `/static/` | `/home/fraarroyo/mysite/static/` |
-| `/media/` | `/home/fraarroyo/mysite/static/uploads/` |
+| `/static/` | `/home/smartlostandfound/mysite/static/` |
+| `/media/` | `/home/smartlostandfound/mysite/static/uploads/` |
 
 ## Step 5: Database Setup
 
 ### 5.1 Initialize Database
 In a Bash console:
 ```bash
-cd /home/fraarroyo/mysite
-python3.10 -c "from app import app, db; app.app_context().push(); db.create_all(); print('Database created')"
+cd /home/smartlostandfound/mysite
+source venv/bin/activate
+python -c "from app import app, db; app.app_context().push(); db.create_all(); print('Database created')"
 ```
 
 ### 5.2 Create Admin User
 ```bash
-python3.10 -c "
+cd /home/smartlostandfound/mysite
+source venv/bin/activate
+python -c "
 from app import app, db, User
 from werkzeug.security import generate_password_hash
 with app.app_context():
@@ -95,15 +114,20 @@ with app.app_context():
 The `wsgi.py` file is already created. Make sure it points to the correct path:
 
 ```python
-#!/usr/bin/python3.10
+#!/home/smartlostandfound/mysite/venv/bin/python
 
 import sys
 import os
 
 # Add your project directory to the Python path
-project_home = '/home/fraarroyo/mysite'
+project_home = '/home/smartlostandfound/mysite'
 if project_home not in sys.path:
     sys.path.insert(0, project_home)
+
+# Add virtual environment site-packages to path
+venv_site_packages = '/home/smartlostandfound/mysite/venv/lib/python3.10/site-packages'
+if venv_site_packages not in sys.path:
+    sys.path.insert(0, venv_site_packages)
 
 # Set the environment variable for the Flask app
 os.environ['FLASK_APP'] = 'app.py'
@@ -118,7 +142,7 @@ if __name__ == "__main__":
 ## Step 7: Reload and Test
 
 1. In the **Web** tab, click **Reload** for your web app
-2. Visit your PythonAnywhere URL: `https://fraarroyo.pythonanywhere.com`
+2. Visit your PythonAnywhere URL: `https://smartlostandfound.pythonanywhere.com`
 3. Test the application:
    - Register a new user
    - Login with admin credentials (admin / admin123)
