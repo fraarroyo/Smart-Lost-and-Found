@@ -35,7 +35,7 @@ def test_checkpoint_integration():
         print(f"  {key}: {value}")
     
     if not checkpoint_info.get('loaded', False):
-        print("❌ Checkpoint model not loaded properly")
+        print("ℹ️  Checkpoint model not available (optional)")
         return False
     
     print("✓ Checkpoint model loaded successfully")

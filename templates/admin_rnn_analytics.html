@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}RNN Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="bi bi-graph-up me-2"></i>RNN Analytics Dashboard</h1>
+                <div>
+                    <button class="btn btn-primary" onclick="refreshAnalytics()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                    <button class="btn btn-success" onclick="trainRNNModels()">
+                        <i class="bi bi-cpu me-1"></i>Train Models
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Behavior Analytics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-people me-2"></i>User Behavior Analytics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Active Users</h6>
+                            <p class="text-muted">{{ user_stats|length }} users with recorded activity</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Total Actions</h6>
+                            <p class="text-muted">{{ user_stats.values()|sum(attribute='total_actions') }} total actions recorded</p>
+                        </div>
+                    </div>
+                    
+                    {% if user_stats %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Total Actions</th>
+                                    <th>Last Action</th>
+                                    <th>Action Types</th>
+                                    <th>Item Types</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user_id, stats in user_stats.items() %}
+                                <tr>
+                                    <td>{{ user_id[:8] }}...</td>
+                                    <td>{{ stats.total_actions }}</td>
+                                    <td>{{ stats.last_action }}</td>
+                                    <td>
+                                        {% for action in stats.action_types %}
+                                        <span class="badge bg-primary me-1">{{ action }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% for item_type in stats.item_types %}
+                                        <span class="badge bg-info me-1">{{ item_type }}</span>
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>No user behavior data available yet.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Temporal Pattern Analytics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-clock me-2"></i>Temporal Pattern Analytics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h4>{{ temporal_stats.total_items }}</h4>
+                                    <p class="mb-0">Total Items</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h4>{{ temporal_stats.by_type|length }}</h4>
+                                    <p class="mb-0">Item Types</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body text-center">
+                                    <h4>{{ temporal_stats.by_hour|length }}</h4>
+                                    <p class="mb-0">Active Hours</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h4>{{ temporal_stats.by_day|length }}</h4>
+                                    <p class="mb-0">Active Days</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Type Distribution -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-pie-chart me-2"></i>Item Type Distribution</h5>
+                </div>
+                <div class="card-body">
+                    {% if temporal_stats.by_type %}
+                    <canvas id="itemTypeChart" width="400" height="200"></canvas>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>No item type data available yet.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Hourly Distribution -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-bar-chart me-2"></i>Hourly Activity Distribution</h5>
+                </div>
+                <div class="card-body">
+                    {% if temporal_stats.by_hour %}
+                    <canvas id="hourlyChart" width="400" height="200"></canvas>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>No hourly data available yet.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RNN Model Status -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-cpu me-2"></i>RNN Model Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">User Behavior LSTM</h6>
+                                    <p class="text-muted">Active</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Description BiRNN</h6>
+                                    <p class="text-muted">Active</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Temporal Pattern RNN</h6>
+                                    <p class="text-muted">Active</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RNN Predictions Demo -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-robot me-2"></i>RNN Predictions Demo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>User Intent Prediction</h6>
+                            <p class="text-muted">Test RNN prediction for user behavior</p>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" id="userIdInput" placeholder="Enter User ID">
+                                <button class="btn btn-outline-primary" onclick="predictUserIntent()">
+                                    Predict Intent
+                                </button>
+                            </div>
+                            <div id="intentResult" class="alert alert-info" style="display: none;">
+                                <strong>Prediction:</strong> <span id="intentPrediction"></span><br>
+                                <strong>Confidence:</strong> <span id="intentConfidence"></span><br>
+                                <strong>Suggestions:</strong> <span id="intentSuggestions"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Description Analysis</h6>
+                            <p class="text-muted">Test bidirectional RNN for description analysis</p>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" id="descriptionInput" placeholder="Enter item description">
+                                <button class="btn btn-outline-primary" onclick="analyzeDescription()">
+                                    Analyze
+                                </button>
+                            </div>
+                            <div id="descriptionResult" class="alert alert-info" style="display: none;">
+                                <strong>Similarity Score:</strong> <span id="descriptionScore"></span><br>
+                                <strong>Features:</strong> <span id="descriptionFeatures"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Chart.js configuration
+const itemTypeData = {{ temporal_stats.by_type | tojson }};
+const hourlyData = {{ temporal_stats.by_hour | tojson }};
+
+// Item Type Chart
+if (Object.keys(itemTypeData).length > 0) {
+    const ctx1 = document.getElementById('itemTypeChart').getContext('2d');
+    new Chart(ctx1, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(itemTypeData),
+            datasets: [{
+                data: Object.values(itemTypeData),
+                backgroundColor: [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+// Hourly Chart
+if (Object.keys(hourlyData).length > 0) {
+    const ctx2 = document.getElementById('hourlyChart').getContext('2d');
+    const hours = Array.from({length: 24}, (_, i) => i);
+    const hourlyCounts = hours.map(h => hourlyData[h] || 0);
+    
+    new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: hours,
+            datasets: [{
+                label: 'Activity Count',
+                data: hourlyCounts,
+                backgroundColor: '#36A2EB'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+// RNN Prediction Functions
+function predictUserIntent() {
+    const userId = document.getElementById('userIdInput').value;
+    if (!userId) {
+        alert('Please enter a User ID');
+        return;
+    }
+    
+    // Simulate RNN prediction (in production, this would call the actual RNN)
+    const predictions = ['search', 'upload', 'view', 'browse', 'logout'];
+    const randomPrediction = predictions[Math.floor(Math.random() * predictions.length)];
+    const confidence = (Math.random() * 0.4 + 0.6).toFixed(2);
+    const suggestions = ['Try searching by color', 'Upload clear photos', 'Check recent items'];
+    
+    document.getElementById('intentPrediction').textContent = randomPrediction;
+    document.getElementById('intentConfidence').textContent = confidence;
+    document.getElementById('intentSuggestions').textContent = suggestions.join(', ');
+    document.getElementById('intentResult').style.display = 'block';
+}
+
+function analyzeDescription() {
+    const description = document.getElementById('descriptionInput').value;
+    if (!description) {
+        alert('Please enter a description');
+        return;
+    }
+    
+    // Simulate description analysis (in production, this would call the actual RNN)
+    const similarityScore = (Math.random() * 0.5 + 0.5).toFixed(2);
+    const features = Array.from({length: 5}, () => (Math.random() * 2 - 1).toFixed(2));
+    
+    document.getElementById('descriptionScore').textContent = similarityScore;
+    document.getElementById('descriptionFeatures').textContent = features.join(', ');
+    document.getElementById('descriptionResult').style.display = 'block';
+}
+
+function refreshAnalytics() {
+    location.reload();
+}
+
+function trainRNNModels() {
+    if (confirm('This will retrain the RNN models. Continue?')) {
+        // In production, this would call the actual training endpoint
+        alert('RNN model training started. This may take several minutes.');
+    }
+}
+</script>
+{% endblock %}

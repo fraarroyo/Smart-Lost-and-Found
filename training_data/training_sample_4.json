@@ -1,35 +1,37 @@
 {
   "item_id": 4,
-  "image_path": "uploads/72fc444a-f842-4d81-8dcc-09e506f63081.jpg",
+  "image_path": "uploads/b076704e-87c9-4823-a1b9-0409bd7fce33.jpg",
   "detected_objects": [
     {
-      "class": "suitcase",
-      "confidence": 0.7135778665542603,
+      "class": "tumbler",
+      "label": 3,
+      "confidence": 1.0,
+      "original_confidence": 0.9787930846214294,
       "box": [
-        14.784249305725098,
-        573.2473754882812,
-        881.8383178710938,
-        1327.6763916015625
-      ],
-      "true_label": "wallet"
+        209.54090881347656,
+        334.5855712890625,
+        786.0953369140625,
+        1337.9957275390625
+      ]
     }
   ],
   "user_labels": [],
   "auto_labels": [
     {
-      "class": "suitcase",
-      "confidence": 0.7135778665542603,
+      "class": "tumbler",
+      "label": 3,
+      "confidence": 1.0,
+      "original_confidence": 0.9787930846214294,
       "box": [
-        14.784249305725098,
-        573.2473754882812,
-        881.8383178710938,
-        1327.6763916015625
-      ],
-      "true_label": "wallet"
+        209.54090881347656,
+        334.5855712890625,
+        786.0953369140625,
+        1337.9957275390625
+      ]
     }
   ],
-  "category": "accessories",
-  "status": "found",
-  "timestamp": "2025-09-16T10:48:09.375914",
+  "category": "other",
+  "status": "lost",
+  "timestamp": "2025-09-27T08:02:29.910441",
   "source": "user_upload"
 }

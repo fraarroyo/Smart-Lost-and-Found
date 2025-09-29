@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}My Items - Lost and Found{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>My Listed Items</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('add_item') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>Add New Item
+            </a>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Home
+            </a>
+        </div>
+    </div>
+    
+    <!-- Status indicator -->
+    <div id="statusIndicator" class="alert alert-info d-none" role="alert">
+        <i class="bi bi-info-circle me-2"></i>
+        <span id="statusMessage">Ready</span>
+    </div>
+
+    <!-- Items Management -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">My Items List</h5>
+                <div class="d-flex gap-2">
+                    <input type="text" class="form-control form-control-sm" placeholder="Search items..." id="searchInput">
+                    <button class="btn btn-outline-primary btn-sm" onclick="searchItems()">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <!-- Filter Buttons -->
+            <div class="p-3 border-bottom">
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('my_items', status='all') }}" 
+                       class="btn {% if status == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        All
+                    </a>
+                    <a href="{{ url_for('my_items', status='lost') }}" 
+                       class="btn {% if status == 'lost' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                        Lost
+                    </a>
+                    <a href="{{ url_for('my_items', status='found') }}" 
+                       class="btn {% if status == 'found' %}btn-success{% else %}btn-outline-success{% endif %}">
+                        Found
+                    </a>
+                    <a href="{{ url_for('my_items', status='matched') }}" 
+                       class="btn {% if status == 'matched' %}btn-info{% else %}btn-outline-info{% endif %}">
+                        Matched
+                    </a>
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>TITLE</th>
+                            <th>STATUS</th>
+                            <th>CATEGORY</th>
+                            <th>DATE</th>
+                            <th>ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% if item.image_path %}
+                                    <img src="{{ url_for('static', filename=item.image_path) }}" 
+                                         class="rounded me-3" 
+                                         style="width: 40px; height: 40px; object-fit: cover;"
+                                         alt="{{ item.title }}">
+                                    {% endif %}
+                                    <div>
+                                        <div class="fw-semibold">{{ item.title }}</div>
+                                        <small class="text-muted">{{ item.description[:50] }}{% if item.description|length > 50 %}...{% endif %}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge {% if item.status == 'lost' %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ item.status|title }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ item.category|title }}</span>
+                            </td>
+                            <td>{{ item.date.strftime('%Y-%m-%d') }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('view_item', item_id=item.id) }}" 
+                                       class="btn btn-sm btn-info" 
+                                       title="View item details"
+                                       data-bs-toggle="tooltip">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('similar_items', item_id=item.id) }}" 
+                                       class="btn btn-sm btn-warning" 
+                                       title="Find similar items"
+                                       data-bs-toggle="tooltip">
+                                        <i class="bi bi-search"></i>
+                                    </a>
+                                    <a href="{{ url_for('modify_description', item_id=item.id) }}" 
+                                       class="btn btn-sm btn-outline-primary" 
+                                       title="Edit item"
+                                       data-bs-toggle="tooltip">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox display-4 d-block mb-2"></i>
+                                No items found. <a href="{{ url_for('add_item') }}">Add your first item</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Status indicator functions
+function showStatus(message, type = 'info') {
+    const indicator = document.getElementById('statusIndicator');
+    const messageEl = document.getElementById('statusMessage');
+    
+    if (indicator && messageEl) {
+        messageEl.textContent = message;
+        indicator.className = `alert alert-${type}`;
+        indicator.classList.remove('d-none');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            indicator.classList.add('d-none');
+        }, 5000);
+    }
+}
+
+function hideStatus() {
+    const indicator = document.getElementById('statusIndicator');
+    if (indicator) {
+        indicator.classList.add('d-none');
+    }
+}
+
+// Search functionality
+function searchItems() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        const title = row.cells[0].textContent.toLowerCase();
+        const description = row.cells[0].querySelector('small').textContent.toLowerCase();
+        
+        if (title.includes(searchTerm) || description.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Initialize tooltips when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('My items page loaded');
+    
+    // Initialize Bootstrap tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Add search on Enter key
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchItems();
+        }
+    });
+});
+
+// Add some visual feedback for the view button
+document.querySelectorAll('a[href*="/item/"]').forEach(function(link) {
+    link.addEventListener('click', function() {
+        const icon = this.querySelector('i');
+        icon.className = 'bi bi-hourglass-split';
+        this.style.opacity = '0.7';
+    });
+});
+</script>
+{% endblock %}

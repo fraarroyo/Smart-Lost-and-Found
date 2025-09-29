@@ -1,37 +1,37 @@
 {
   "item_id": 6,
-  "image_path": "uploads/6febeed9-e51e-417d-886e-16f182060fd3.jpg",
+  "image_path": "uploads/6096897d-2eb5-4a82-a535-2c7e9ad395ca.jpg",
   "detected_objects": [
     {
-      "class": "mouse",
-      "confidence": 0.5747430920600891,
-      "original_confidence": 0.5747430920600891,
+      "class": "tumbler",
+      "label": 3,
+      "confidence": 0.9803040266036988,
+      "original_confidence": 0.9553040266036987,
       "box": [
-        380.0031433105469,
-        530.1448364257812,
-        1177.8656005859375,
-        1401.5223388671875
-      ],
-      "true_label": "mouse"
+        199.14210510253906,
+        155.8580780029297,
+        610.3236083984375,
+        1313.2928466796875
+      ]
     }
   ],
   "user_labels": [],
   "auto_labels": [
     {
-      "class": "mouse",
-      "confidence": 0.5747430920600891,
-      "original_confidence": 0.5747430920600891,
+      "class": "tumbler",
+      "label": 3,
+      "confidence": 0.9803040266036988,
+      "original_confidence": 0.9553040266036987,
       "box": [
-        380.0031433105469,
-        530.1448364257812,
-        1177.8656005859375,
-        1401.5223388671875
-      ],
-      "true_label": "mouse"
+        199.14210510253906,
+        155.8580780029297,
+        610.3236083984375,
+        1313.2928466796875
+      ]
     }
   ],
   "category": "other",
-  "status": "found",
-  "timestamp": "2025-09-16T10:48:09.401525",
+  "status": "lost",
+  "timestamp": "2025-09-27T09:14:01.376173",
   "source": "user_upload"
 }

@@ -7,10 +7,19 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>Manage Items</h1>
         <div class="btn-group">
+            <button class="btn btn-outline-info" onclick="testButtons()">
+                <i class="bi bi-bug me-2"></i>Test Buttons
+            </button>
             <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
                 <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
             </a>
         </div>
+    </div>
+    
+    <!-- Status indicator -->
+    <div id="statusIndicator" class="alert alert-info d-none" role="alert">
+        <i class="bi bi-info-circle me-2"></i>
+        <span id="statusMessage">Ready</span>
     </div>
 
     <!-- Items Management -->
@@ -62,14 +71,25 @@
                             <td>{{ item.owner.username }}</td>
                             <td>{{ item.date.strftime('%Y-%m-%d') }}</td>
                             <td>
-                                <div class="btn-group">
-                                    <a href="{{ url_for('view_item', item_id=item.id) }}" class="btn btn-sm btn-info">
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('view_item', item_id=item.id) }}" 
+                                       class="btn btn-sm btn-info" 
+                                       title="View item details"
+                                       data-bs-toggle="tooltip">
                                         <i class="bi bi-eye"></i>
                                     </a>
-                                    <button class="btn btn-sm btn-warning" onclick="editItem('{{ item.id }}')">
+                                    <button class="btn btn-sm btn-warning edit-btn" 
+                                            onclick="editItem('{{ item.id }}', event)"
+                                            data-item-id="{{ item.id }}"
+                                            title="Edit item"
+                                            data-bs-toggle="tooltip">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteItem('{{ item.id }}')">
+                                    <button class="btn btn-sm btn-danger delete-btn" 
+                                            onclick="deleteItem('{{ item.id }}', event)"
+                                            data-item-id="{{ item.id }}"
+                                            title="Delete item"
+                                            data-bs-toggle="tooltip">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
@@ -87,28 +107,437 @@
 
 {% block scripts %}
 <script>
-function editItem(itemId) {
-    // TODO: Implement item editing modal
-    alert('Edit item functionality coming soon!');
+// Debug function to test if JavaScript is working
+console.log('Admin items page JavaScript loaded');
+
+// Initialize tooltips and event delegation when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing tooltips and event delegation');
+    
+    // Initialize Bootstrap tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Add event delegation as backup for buttons
+    document.addEventListener('click', function(e) {
+        // Handle edit buttons
+        if (e.target.closest('.edit-btn')) {
+            const button = e.target.closest('.edit-btn');
+            const itemId = button.getAttribute('data-item-id');
+            console.log('Edit button clicked via delegation for item:', itemId);
+            e.preventDefault();
+            e.stopPropagation();
+            editItem(itemId, e);
+        }
+        
+        // Handle delete buttons
+        if (e.target.closest('.delete-btn')) {
+            const button = e.target.closest('.delete-btn');
+            const itemId = button.getAttribute('data-item-id');
+            console.log('Delete button clicked via delegation for item:', itemId);
+            e.preventDefault();
+            e.stopPropagation();
+            deleteItem(itemId, e);
+        }
+    });
+});
+
+// Status indicator functions
+function showStatus(message, type = 'info') {
+    const indicator = document.getElementById('statusIndicator');
+    const messageEl = document.getElementById('statusMessage');
+    
+    if (indicator && messageEl) {
+        messageEl.textContent = message;
+        indicator.className = `alert alert-${type}`;
+        indicator.classList.remove('d-none');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            indicator.classList.add('d-none');
+        }, 5000);
+    }
 }
 
-function deleteItem(itemId) {
-    if (confirm('Are you sure you want to delete this item?')) {
+function hideStatus() {
+    const indicator = document.getElementById('statusIndicator');
+    if (indicator) {
+        indicator.classList.add('d-none');
+    }
+}
+
+function testButtons() {
+    alert('JavaScript is working! Buttons should be functional.');
+    console.log('Test button clicked - JavaScript is working');
+    
+    // Debug: Check all buttons on the page
+    const allButtons = document.querySelectorAll('button');
+    console.log('Total buttons found:', allButtons.length);
+    
+    const editButtons = document.querySelectorAll('button[onclick*="editItem"]');
+    const deleteButtons = document.querySelectorAll('button[onclick*="deleteItem"]');
+    
+    console.log('Edit buttons found:', editButtons.length);
+    console.log('Delete buttons found:', deleteButtons.length);
+    
+    // Test each button
+    editButtons.forEach((btn, index) => {
+        console.log(`Edit button ${index}:`, btn);
+        console.log(`  onclick: ${btn.getAttribute('onclick')}`);
+    });
+    
+    deleteButtons.forEach((btn, index) => {
+        console.log(`Delete button ${index}:`, btn);
+        console.log(`  onclick: ${btn.getAttribute('onclick')}`);
+    });
+    
+    // Test functions are accessible
+    console.log('editItem function:', typeof editItem);
+    console.log('deleteItem function:', typeof deleteItem);
+    
+    // Test with first item if available
+    const firstEditButton = editButtons[0];
+    if (firstEditButton) {
+        const onclick = firstEditButton.getAttribute('onclick');
+        const match = onclick.match(/editItem\('(\d+)'/);
+        if (match) {
+            const itemId = match[1];
+            console.log('Testing editItem with item ID:', itemId);
+            // Don't actually call it, just test the function exists
+        }
+    }
+}
+
+// Make functions globally accessible for testing
+window.editItem = editItem;
+window.deleteItem = deleteItem;
+window.testButtons = testButtons;
+
+function editItem(itemId, event) {
+    console.log('Edit button clicked for item:', itemId);
+    
+    // Show loading state
+    const button = event ? event.target.closest('button') : document.querySelector(`button[onclick*="editItem('${itemId}')"]`);
+    
+    if (!button) {
+        console.error('Could not find edit button element');
+        return;
+    }
+    
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    button.disabled = true;
+    
+    // Fetch item data
+    fetch(`/admin/items/${itemId}/edit-data`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showEditModal(data.item);
+            } else {
+                alert('Error loading item data: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading item data. Please try again.');
+        })
+        .finally(() => {
+            // Reset button
+            button.innerHTML = originalContent;
+            button.disabled = false;
+        });
+}
+
+function showEditModal(item) {
+    // Create modal HTML
+    const modalHtml = `
+        <div class="modal fade" id="editItemModal" tabindex="-1" aria-labelledby="editItemModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editItemModalLabel">Edit Item: ${item.title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editItemForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editTitle" class="form-label">Title</label>
+                                        <input type="text" class="form-control" id="editTitle" value="${item.title}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editCategory" class="form-label">Category</label>
+                                        <select class="form-select" id="editCategory" required>
+                                            <option value="phone" ${item.category === 'phone' ? 'selected' : ''}>Phone</option>
+                                            <option value="wallet" ${item.category === 'wallet' ? 'selected' : ''}>Wallet</option>
+                                            <option value="keys" ${item.category === 'keys' ? 'selected' : ''}>Keys</option>
+                                            <option value="laptop" ${item.category === 'laptop' ? 'selected' : ''}>Laptop</option>
+                                            <option value="bag" ${item.category === 'bag' ? 'selected' : ''}>Bag</option>
+                                            <option value="clothing" ${item.category === 'clothing' ? 'selected' : ''}>Clothing</option>
+                                            <option value="jewelry" ${item.category === 'jewelry' ? 'selected' : ''}>Jewelry</option>
+                                            <option value="book" ${item.category === 'book' ? 'selected' : ''}>Book</option>
+                                            <option value="tumbler" ${item.category === 'tumbler' ? 'selected' : ''}>Tumbler</option>
+                                            <option value="other" ${item.category === 'other' ? 'selected' : ''}>Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editStatus" class="form-label">Status</label>
+                                        <select class="form-select" id="editStatus" required>
+                                            <option value="lost" ${item.status === 'lost' ? 'selected' : ''}>Lost</option>
+                                            <option value="found" ${item.status === 'found' ? 'selected' : ''}>Found</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editLocation" class="form-label">Location</label>
+                                        <input type="text" class="form-control" id="editLocation" value="${item.location || ''}">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="editDescription" class="form-label">Description</label>
+                                <textarea class="form-control" id="editDescription" rows="3" required>${item.description}</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editBrand" class="form-label">Brand</label>
+                                        <input type="text" class="form-control" id="editBrand" value="${item.brand || ''}">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editModel" class="form-label">Model</label>
+                                        <input type="text" class="form-control" id="editModel" value="${item.model || ''}">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editColor" class="form-label">Color</label>
+                                        <input type="text" class="form-control" id="editColor" value="${item.color || ''}">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="editSize" class="form-label">Size</label>
+                                        <input type="text" class="form-control" id="editSize" value="${item.size || ''}">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="editAdditionalNotes" class="form-label">Additional Notes</label>
+                                <textarea class="form-control" id="editAdditionalNotes" rows="2">${item.additional_notes || ''}</textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="saveItemChanges(${item.id})">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('editItemModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('editItemModal'));
+    modal.show();
+}
+
+function saveItemChanges(itemId) {
+    const form = document.getElementById('editItemForm');
+    const formData = new FormData();
+    
+    // Collect form data
+    formData.append('title', document.getElementById('editTitle').value);
+    formData.append('category', document.getElementById('editCategory').value);
+    formData.append('status', document.getElementById('editStatus').value);
+    formData.append('location', document.getElementById('editLocation').value);
+    formData.append('description', document.getElementById('editDescription').value);
+    formData.append('brand', document.getElementById('editBrand').value);
+    formData.append('model', document.getElementById('editModel').value);
+    formData.append('color', document.getElementById('editColor').value);
+    formData.append('size', document.getElementById('editSize').value);
+    formData.append('additional_notes', document.getElementById('editAdditionalNotes').value);
+    
+    // Show loading state
+    const saveButton = document.querySelector('#editItemModal .btn-primary');
+    const originalText = saveButton.textContent;
+    saveButton.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    saveButton.disabled = true;
+    
+    // Send update request
+    fetch(`/admin/items/${itemId}/update`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            saveButton.innerHTML = '<i class="bi bi-check"></i> Saved!';
+            saveButton.classList.remove('btn-primary');
+            saveButton.classList.add('btn-success');
+            
+            // Close modal after delay
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('editItemModal')).hide();
+                location.reload(); // Refresh the page to show updated data
+            }, 1000);
+        } else {
+            // Show error
+            saveButton.innerHTML = '<i class="bi bi-x"></i> Error';
+            saveButton.classList.remove('btn-primary');
+            saveButton.classList.add('btn-danger');
+            alert('Error updating item: ' + data.error);
+            
+            // Reset button after delay
+            setTimeout(() => {
+                saveButton.innerHTML = originalText;
+                saveButton.classList.remove('btn-danger');
+                saveButton.classList.add('btn-primary');
+                saveButton.disabled = false;
+            }, 2000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        saveButton.innerHTML = '<i class="bi bi-x"></i> Error';
+        saveButton.classList.remove('btn-primary');
+        saveButton.classList.add('btn-danger');
+        alert('Error updating item. Please try again.');
+        
+        // Reset button after delay
+        setTimeout(() => {
+            saveButton.innerHTML = originalText;
+            saveButton.classList.remove('btn-danger');
+            saveButton.classList.add('btn-primary');
+            saveButton.disabled = false;
+        }, 2000);
+    });
+}
+
+function deleteItem(itemId, event) {
+    console.log('Delete button clicked for item:', itemId);
+    
+    showStatus('Delete button clicked. Processing...', 'warning');
+    
+    // Add visual feedback immediately
+    const button = event ? event.target.closest('button') : document.querySelector(`button[onclick*="deleteItem('${itemId}')"]`);
+    
+    if (!button) {
+        console.error('Could not find delete button element');
+        return;
+    }
+    
+    button.style.backgroundColor = '#ff6b6b';
+    button.style.color = 'white';
+    
+    if (confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+        // Show loading state
+        const originalContent = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+        button.disabled = true;
+        
         fetch(`/admin/items/${itemId}/delete`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token() }}'
+                'Content-Type': 'application/x-www-form-urlencoded'
             }
         }).then(response => {
-            if (response.ok) {
-                location.reload();
+            console.log('Delete response status:', response.status);
+            console.log('Delete response headers:', response.headers.get('content-type'));
+            
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                return response.json().then(data => {
+                    return { response, data };
+                });
             } else {
-                alert('Error deleting item');
+                // Handle non-JSON responses (like redirects)
+                return response.text().then(text => {
+                    console.log('Non-JSON response:', text);
+                    return { 
+                        response, 
+                        data: { 
+                            success: false, 
+                            error: 'Server returned non-JSON response. You may need to login again.' 
+                        } 
+                    };
+                });
+            }
+        }).then(({ response, data }) => {
+            if (response.ok && data.success) {
+                // Show success message
+                button.innerHTML = '<i class="bi bi-check"></i>';
+                button.classList.remove('btn-danger');
+                button.classList.add('btn-success');
+                
+                // Show success message
+                const row = button.closest('tr');
+                const titleCell = row.cells[0];
+                const originalTitle = titleCell.textContent;
+                titleCell.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${originalTitle} - Deleted</span>`;
+                
+                // Remove the row after a short delay
+                setTimeout(() => {
+                    row.style.transition = 'opacity 0.3s';
+                    row.style.opacity = '0';
+                    setTimeout(() => {
+                        row.remove();
+                    }, 300);
+                }, 1500);
+            } else {
+                // Show error
+                button.innerHTML = '<i class="bi bi-x"></i>';
+                button.classList.remove('btn-danger');
+                button.classList.add('btn-danger');
+                alert(data.error || 'Error deleting item. Please try again.');
+                
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalContent;
+                    button.disabled = false;
+                }, 2000);
             }
         }).catch(error => {
             console.error('Error:', error);
-            alert('Error deleting item');
+            button.innerHTML = '<i class="bi bi-x"></i>';
+            button.classList.remove('btn-danger');
+            button.classList.add('btn-danger');
+            alert('Error deleting item. Please check your connection and try again.');
+            
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                button.innerHTML = originalContent;
+                button.disabled = false;
+            }, 2000);
         });
     }
 }
@@ -138,6 +567,23 @@ document.getElementById('itemSearch').addEventListener('keyup', function(event) 
     if (event.key === 'Enter') {
         document.getElementById('searchButton').click();
     }
+});
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+// Add some visual feedback for the view button
+document.querySelectorAll('a[href*="/item/"]').forEach(function(link) {
+    link.addEventListener('click', function() {
+        const icon = this.querySelector('i');
+        icon.className = 'bi bi-hourglass-split';
+        this.style.opacity = '0.7';
+    });
 });
 </script>
 {% endblock %} 

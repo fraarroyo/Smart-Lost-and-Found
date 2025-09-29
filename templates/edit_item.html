@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Item - Lost and Found{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">Edit Item</h2>
+                <div class="d-flex justify-content-center mb-4">
+                    <button type="button" id="btnLost" class="btn btn-outline-danger me-2">Lost</button>
+                    <button type="button" id="btnFound" class="btn btn-outline-success">Found</button>
+                </div>
+                <form method="POST" action="{{ url_for('edit_item', item_id=item.id) }}" enctype="multipart/form-data" class="needs-validation" novalidate>
+                    <!-- Current Image Display -->
+                    <div class="mb-3">
+                        <label class="form-label">Current Image</label>
+                        <div class="text-center mb-3">
+                            <img src="{{ url_for('static', filename=item.image_path) }}" alt="Current item image" class="img-fluid rounded" style="max-height: 300px; width: auto;">
+                        </div>
+                    </div>
+
+                    <!-- New Image Upload -->
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Update Image (optional)</label>
+                        <div class="input-group mb-3">
+                            <span class="input-group-text"><i class="bi bi-image"></i></span>
+                            <input type="file" class="form-control" id="image" name="image" accept="image/*">
+                        </div>
+                        <div id="imagePreviewContainer" class="d-none mb-3">
+                            <img id="imagePreview" src="#" alt="Image preview" class="img-fluid rounded" style="max-height: 300px; width: auto;">
+                        </div>
+                        <div class="form-text">Upload a new image to replace the current one. The system will automatically analyze the new image.</div>
+                    </div>
+
+                    <div id="processingIndicator" class="alert alert-info d-none">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span>Processing new image and analyzing item...</span>
+                        </div>
+                    </div>
+
+                    <div id="extractedDetails" class="alert alert-success d-none mb-3">
+                        <h5 class="alert-heading">New Item Analysis</h5>
+                        <div id="itemAnalysisList"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Item Title</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-tag"></i></span>
+                            <input type="text" class="form-control" id="title" name="title" value="{{ item.title }}" required>
+                            <div class="invalid-feedback">
+                                Please provide a title for the item.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" required>{{ item.description }}</textarea>
+                        <div class="invalid-feedback">
+                            Please provide a description.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Category</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-grid"></i></span>
+                            <select class="form-select" id="category" name="category" required>
+                                <option value="">Select a category</option>
+                                <option value="electronics" {% if item.category == 'electronics' %}selected{% endif %}>Electronics</option>
+                                <option value="clothing" {% if item.category == 'clothing' %}selected{% endif %}>Clothing</option>
+                                <option value="accessories" {% if item.category == 'accessories' %}selected{% endif %}>Accessories</option>
+                                <option value="documents" {% if item.category == 'documents' %}selected{% endif %}>Documents</option>
+                                <option value="other" {% if item.category == 'other' %}selected{% endif %}>Other</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Please select a category.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="brand" class="form-label">Brand (optional)</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-tag"></i></span>
+                            <input type="text" class="form-control" id="brand" name="brand" 
+                                   placeholder="e.g., Apple, Samsung, Nike, etc." value="{{ item.brand or '' }}">
+                        </div>
+                        <div class="form-text">Enter the brand or manufacturer of the item if known.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="location" class="form-label" id="locationLabel">Location {{ 'Lost' if item.status == 'lost' else 'Found' }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                            <input type="text" class="form-control" id="location" name="location" required
+                                   placeholder="Enter the location where the item was {{ 'lost' if item.status == 'lost' else 'found' }}" value="{{ item.location }}">
+                            <div class="invalid-feedback">
+                                Please provide the location.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Information Section -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">
+                                <i class="bi bi-telephone me-2"></i>Contact Information
+                                <span class="badge bg-light text-primary ms-2">Recommended</span>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Owner Contact Information -->
+                            <div class="mb-4">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-person me-2"></i>Your Contact Information
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="owner_contact" class="form-label fw-bold">
+                                            <i class="bi bi-phone me-1"></i>Phone Number
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                                            <input type="tel" class="form-control" id="owner_contact" name="owner_contact" 
+                                                   placeholder="e.g., (555) 123-4567" value="{{ item.owner_contact or '' }}">
+                                        </div>
+                                        <div class="form-text">Your primary contact number</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="owner_email" class="form-label fw-bold">
+                                            <i class="bi bi-envelope me-1"></i>Email Address
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                            <input type="email" class="form-control" id="owner_email" name="owner_email" 
+                                                   placeholder="e.g., your.email@example.com" value="{{ item.owner_email or '' }}">
+                                        </div>
+                                        <div class="form-text">Your email for notifications</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Finder Contact Information -->
+                            <div class="mb-4">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-search me-2"></i>Finder's Contact Information
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="finder_contact" class="form-label fw-bold">
+                                            <i class="bi bi-phone me-1"></i>Phone Number
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                                            <input type="tel" class="form-control" id="finder_contact" name="finder_contact" 
+                                                   placeholder="e.g., (555) 123-4567" value="{{ item.finder_contact or '' }}">
+                                        </div>
+                                        <div class="form-text">Contact number of person who found the item</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="finder_email" class="form-label fw-bold">
+                                            <i class="bi bi-envelope me-1"></i>Email Address
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                            <input type="email" class="form-control" id="finder_email" name="finder_email" 
+                                                   placeholder="e.g., finder@example.com" value="{{ item.finder_email or '' }}">
+                                        </div>
+                                        <div class="form-text">Email of person who found the item</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Alternative Contact Methods -->
+                            <div class="mb-3">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-chat-dots me-2"></i>Alternative Contact Methods
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="contact_preference" class="form-label fw-bold">
+                                            <i class="bi bi-heart me-1"></i>Preferred Contact Method
+                                        </label>
+                                        <select class="form-select" id="contact_preference" name="contact_preference">
+                                            <option value="">Select preferred method</option>
+                                            <option value="phone" {% if item.contact_preference == 'phone' %}selected{% endif %}>Phone Call</option>
+                                            <option value="email" {% if item.contact_preference == 'email' %}selected{% endif %}>Email</option>
+                                            <option value="text" {% if item.contact_preference == 'text' %}selected{% endif %}>Text Message</option>
+                                            <option value="any" {% if item.contact_preference == 'any' %}selected{% endif %}>Any Method</option>
+                                        </select>
+                                        <div class="form-text">How would you prefer to be contacted?</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="best_time_to_contact" class="form-label fw-bold">
+                                            <i class="bi bi-clock me-1"></i>Best Time to Contact
+                                        </label>
+                                        <select class="form-select" id="best_time_to_contact" name="best_time_to_contact">
+                                            <option value="">Select best time</option>
+                                            <option value="morning" {% if item.best_time_to_contact == 'morning' %}selected{% endif %}>Morning (8 AM - 12 PM)</option>
+                                            <option value="afternoon" {% if item.best_time_to_contact == 'afternoon' %}selected{% endif %}>Afternoon (12 PM - 5 PM)</option>
+                                            <option value="evening" {% if item.best_time_to_contact == 'evening' %}selected{% endif %}>Evening (5 PM - 8 PM)</option>
+                                            <option value="anytime" {% if item.best_time_to_contact == 'anytime' %}selected{% endif %}>Anytime</option>
+                                        </select>
+                                        <div class="form-text">When is the best time to reach you?</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Privacy Note:</strong> Contact information is only visible to users involved in potential matches. 
+                                At least one contact method is recommended to help facilitate item returns.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="additional_notes" class="form-label">Additional information (optional)</label>
+                        <textarea class="form-control" id="additional_notes" name="additional_notes" rows="3" placeholder="e.g., case color, stickers, identifying marks, passcode hints, etc.">{{ item.additional_notes or '' }}</textarea>
+                        <small class="form-text text-muted">Avoid sharing sensitive personal information.</small>
+                    </div>
+
+                    <input type="hidden" name="status" id="statusInput" value="{{ item.status }}">
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Update Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const imageInput = document.getElementById('image');
+    const imagePreview = document.getElementById('imagePreview');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const processingIndicator = document.getElementById('processingIndicator');
+    const extractedDetails = document.getElementById('extractedDetails');
+    const categorySelect = document.getElementById('category');
+    const btnLost = document.getElementById('btnLost');
+    const btnFound = document.getElementById('btnFound');
+    const statusInput = document.getElementById('statusInput');
+    const locationLabel = document.getElementById('locationLabel');
+
+    // Form validation
+    form.addEventListener('submit', function(event) {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+    });
+
+    // Image preview for new image
+    imageInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            const file = this.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                imagePreview.src = e.target.result;
+                imagePreviewContainer.classList.remove('d-none');
+            }
+            
+            reader.readAsDataURL(file);
+            
+            // Show processing indicator
+            processingIndicator.classList.remove('d-none');
+            extractedDetails.classList.add('d-none');
+
+            // Create FormData and send to server for processing
+            const formData = new FormData();
+            formData.append('image', file);
+
+            fetch('/process_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                processingIndicator.classList.add('d-none');
+
+                // Only show extracted details if items are present
+                if (data.items && data.items.length > 0) {
+                    extractedDetails.classList.remove('d-none');
+                    const itemAnalysisList = document.getElementById('itemAnalysisList');
+                    itemAnalysisList.innerHTML = '';
+                    data.items.forEach((item, idx) => {
+                        itemAnalysisList.innerHTML += `
+                            <div style="margin-bottom: 1em; border-bottom:1px solid #eee;">
+                                <strong>Item ${idx + 1}</strong><br>
+                                <b>Type:</b> ${item.item_type || ''}<br>
+                                <b>Color:</b> ${item.color || ''}<br>
+                                <b>Size:</b> ${item.size || ''}<br>
+                                <b>Description:</b> ${item.description || ''}<br>
+                            </div>
+                        `;
+                    });
+                    // Optionally auto-select the category of the first item
+                    if (data.items[0].category) {
+                        categorySelect.value = data.items[0].category;
+                    }
+                } else {
+                    extractedDetails.classList.remove('d-none');
+                    const itemAnalysisList = document.getElementById('itemAnalysisList');
+                    itemAnalysisList.innerHTML = '<i>No items detected.</i>';
+                }
+            })
+            .catch(error => {
+                console.error('Error in fetch:', error);
+                processingIndicator.classList.add('d-none');
+            });
+        }
+    });
+
+    function updateStatusButtons(selected) {
+        if (selected === 'lost') {
+            btnLost.classList.add('active', 'btn-danger');
+            btnLost.classList.remove('btn-outline-danger');
+            btnFound.classList.remove('active', 'btn-success');
+            btnFound.classList.add('btn-outline-success');
+            locationLabel.textContent = 'Location Lost';
+        } else {
+            btnFound.classList.add('active', 'btn-success');
+            btnFound.classList.remove('btn-outline-success');
+            btnLost.classList.remove('active', 'btn-danger');
+            btnLost.classList.add('btn-outline-danger');
+            locationLabel.textContent = 'Location Found';
+        }
+    }
+
+    // Set initial state based on current item status
+    updateStatusButtons(statusInput.value || 'lost');
+
+    btnLost.addEventListener('click', function() {
+        statusInput.value = 'lost';
+        updateStatusButtons('lost');
+    });
+    btnFound.addEventListener('click', function() {
+        statusInput.value = 'found';
+        updateStatusButtons('found');
+    });
+});
+</script>
+{% endblock %}

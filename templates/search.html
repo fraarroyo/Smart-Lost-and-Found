@@ -7,6 +7,33 @@
     <div class="col">
         <h1 class="display-4">Search Items</h1>
         <p class="lead">Find lost items or check if someone found your belongings.</p>
+        
+        <!-- RNN Suggestions -->
+        {% if user_intent and user_intent.prediction != 'unknown' %}
+        <div class="alert alert-info">
+            <h6><i class="bi bi-robot me-2"></i>AI Suggestions</h6>
+            <p class="mb-2">Based on your behavior patterns, you might want to:</p>
+            <ul class="mb-0">
+                {% for suggestion in user_intent.suggestions %}
+                <li>{{ suggestion }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        <!-- Temporal Predictions -->
+        {% if temporal_prediction and temporal_prediction.predicted_time_period %}
+        <div class="alert alert-warning">
+            <h6><i class="bi bi-clock me-2"></i>Time-based Insights</h6>
+            <p class="mb-2">Items like this are typically found during <strong>{{ temporal_prediction.predicted_time_period }}</strong>.</p>
+            <p class="mb-0">Suggestions:</p>
+            <ul class="mb-0">
+                {% for recommendation in temporal_prediction.recommendations %}
+                <li>{{ recommendation }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
     </div>
 </div>
 

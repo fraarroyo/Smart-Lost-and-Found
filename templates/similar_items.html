@@ -34,9 +34,19 @@
     <div class="col-md-8">
         <h4 class="mb-4">Similar Items Found</h4>
         <div class="row row-cols-1 row-cols-md-2 g-4">
-            {% for similar_item in similar_items %}
+            {% for similar_data in similar_items %}
+            {% set similar_item = similar_data.item %}
+            {% set is_confirmed_match = similar_data.is_confirmed_match %}
             <div class="col">
-                <div class="card h-100">
+                <div class="card h-100 {% if is_confirmed_match %}border-success{% endif %}">
+                    {% if is_confirmed_match %}
+                    <div class="card-header bg-success text-white">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <strong>Confirmed Match!</strong>
+                        </div>
+                    </div>
+                    {% endif %}
                     {% if similar_item.image_path %}
                     <img src="{{ url_for('static', filename=similar_item.image_path) }}" 
                          class="card-img-top" 
@@ -50,6 +60,32 @@
                     <div class="card-body">
                         <h5 class="card-title">{{ similar_item.title }}</h5>
                         <p class="card-text">{{ similar_item.description[:100] }}{% if similar_item.description|length > 100 %}...{% endif %}</p>
+                        
+                        {% if is_confirmed_match %}
+                        <!-- Finder Details Section -->
+                        <div class="alert alert-success mt-3">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-person-check me-1"></i>Finder Details
+                            </h6>
+                            <div class="d-flex flex-column gap-2">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-person text-success me-2"></i>
+                                    <span><strong>Name:</strong> {{ similar_item.owner.username }}</span>
+                                </div>
+                                {% if similar_item.owner.email %}
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-envelope text-success me-2"></i>
+                                    <span><strong>Email:</strong> {{ similar_item.owner.email }}</span>
+                                </div>
+                                {% endif %}
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-calendar-check text-success me-2"></i>
+                                    <span><strong>Found on:</strong> {{ similar_item.date.strftime('%B %d, %Y at %I:%M %p') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
                         <div class="d-flex flex-column gap-2 mt-3">
                             {% if similar_item.location %}
                             <div class="d-flex align-items-center">
@@ -68,7 +104,32 @@
                         </div>
                     </div>
                     <div class="card-footer bg-transparent">
-                        <a href="{{ url_for('view_item', item_id=similar_item.id) }}" class="btn btn-primary w-100">View Details</a>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('view_item', item_id=similar_item.id) }}" class="btn btn-primary">
+                                <i class="bi bi-eye me-1"></i>View Details
+                            </a>
+                            {% if current_user.is_authenticated and similar_item.user_id != current_user.id %}
+                                {% if is_confirmed_match %}
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-success btn-sm" disabled>
+                                        <i class="bi bi-check-circle-fill me-1"></i>Match Confirmed
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="notAMatch({{ item.id }}, {{ similar_item.id }}, event)">
+                                        <i class="bi bi-x-circle me-1"></i>Not a Match
+                                    </button>
+                                </div>
+                                {% else %}
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-success btn-sm" onclick="markAsMatch({{ item.id }}, {{ similar_item.id }}, event)">
+                                        <i class="bi bi-check-circle me-1"></i>This is a Match
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="notAMatch({{ item.id }}, {{ similar_item.id }}, event)">
+                                        <i class="bi bi-x-circle me-1"></i>Not a Match
+                                    </button>
+                                </div>
+                                {% endif %}
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -82,4 +143,196 @@
         </div>
     </div>
 </div>
+
+<!-- Status indicator -->
+<div id="statusIndicator" class="alert alert-info d-none position-fixed" style="top: 20px; right: 20px; z-index: 1050;" role="alert">
+    <i class="bi bi-info-circle me-2"></i>
+    <span id="statusMessage">Ready</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Status indicator functions
+function showStatus(message, type = 'info') {
+    const indicator = document.getElementById('statusIndicator');
+    const messageEl = document.getElementById('statusMessage');
+    
+    if (indicator && messageEl) {
+        messageEl.textContent = message;
+        indicator.className = `alert alert-${type} position-fixed`;
+        indicator.classList.remove('d-none');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            indicator.classList.add('d-none');
+        }, 5000);
+    }
+}
+
+function markAsMatch(itemId, similarItemId, event) {
+    if (confirm('Are you sure this is a match? This will notify both item owners.')) {
+        showStatus('Marking as match...', 'warning');
+        
+        fetch('/api/mark-match', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                lost_item_id: itemId,
+                found_item_id: similarItemId,
+                status: 'confirmed'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showStatus('Match confirmed! Both owners have been notified.', 'success');
+                
+                // Update the card to show confirmed match status
+                const card = event.target.closest('.card');
+                const cardHeader = card.querySelector('.card-header');
+                const cardBody = card.querySelector('.card-body');
+                const cardFooter = card.querySelector('.card-footer');
+                
+                // Add confirmed match header if not already present
+                if (!cardHeader || !cardHeader.classList.contains('bg-success')) {
+                    const newHeader = document.createElement('div');
+                    newHeader.className = 'card-header bg-success text-white';
+                    newHeader.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <strong>Confirmed Match!</strong>
+                        </div>
+                    `;
+                    card.insertBefore(newHeader, cardBody);
+                }
+                
+                // Add finder details section
+                const finderDetails = document.createElement('div');
+                finderDetails.className = 'alert alert-success mt-3';
+                finderDetails.innerHTML = `
+                    <h6 class="alert-heading">
+                        <i class="bi bi-person-check me-1"></i>Finder Details
+                    </h6>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-person text-success me-2"></i>
+                            <span><strong>Name:</strong> <span id="finder-name">Loading...</span></span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-envelope text-success me-2"></i>
+                            <span><strong>Email:</strong> <span id="finder-email">Loading...</span></span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-calendar-check text-success me-2"></i>
+                            <span><strong>Found on:</strong> <span id="finder-date">Loading...</span></span>
+                        </div>
+                    </div>
+                `;
+                
+                // Insert finder details before the existing details
+                const existingDetails = cardBody.querySelector('.d-flex.flex-column.gap-2.mt-3');
+                if (existingDetails) {
+                    cardBody.insertBefore(finderDetails, existingDetails);
+                } else {
+                    cardBody.appendChild(finderDetails);
+                }
+                
+                // Update button state
+                const buttonGroup = cardFooter.querySelector('.btn-group');
+                if (buttonGroup) {
+                    buttonGroup.innerHTML = `
+                        <button class="btn btn-success btn-sm" disabled>
+                            <i class="bi bi-check-circle-fill me-1"></i>Match Confirmed
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="notAMatch(${itemId}, ${similarItemId}, event)">
+                            <i class="bi bi-x-circle me-1"></i>Not a Match
+                        </button>
+                    `;
+                }
+                
+                // Add border to card
+                card.classList.add('border-success');
+                
+                // Load finder details (you might want to fetch this from an API)
+                // For now, we'll show placeholder text
+                setTimeout(() => {
+                    const finderName = document.getElementById('finder-name');
+                    const finderEmail = document.getElementById('finder-email');
+                    const finderDate = document.getElementById('finder-date');
+                    
+                    if (finderName) finderName.textContent = 'Contact the finder for details';
+                    if (finderEmail) finderEmail.textContent = 'Contact the finder for details';
+                    if (finderDate) finderDate.textContent = new Date().toLocaleString();
+                }, 1000);
+                
+            } else {
+                showStatus('Error: ' + data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showStatus('Error marking as match. Please try again.', 'danger');
+        });
+    }
+}
+
+function notAMatch(itemId, similarItemId, event) {
+    if (confirm('Mark this as not a match? This will help improve future recommendations.')) {
+        showStatus('Recording feedback...', 'warning');
+        
+        fetch('/api/not-match', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                lost_item_id: itemId,
+                found_item_id: similarItemId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showStatus('Feedback recorded. This item will be hidden from future matches.', 'success');
+                // Hide the entire card
+                const card = event.target.closest('.col');
+                if (card) {
+                    card.style.transition = 'opacity 0.5s ease-out';
+                    card.style.opacity = '0';
+                    setTimeout(() => {
+                        card.remove();
+                        // Check if no more items
+                        const remainingItems = document.querySelectorAll('.col');
+                        if (remainingItems.length === 0) {
+                            const container = document.querySelector('.row.row-cols-1.row-cols-md-2.g-4');
+                            container.innerHTML = `
+                                <div class="col-12">
+                                    <div class="alert alert-info text-center">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        No similar items found. Try checking back later or adjust your search criteria.
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }, 500);
+                }
+            } else {
+                showStatus('Error: ' + data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showStatus('Error recording feedback. Please try again.', 'danger');
+        });
+    }
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Similar items page loaded');
+});
+</script>
 {% endblock %} 

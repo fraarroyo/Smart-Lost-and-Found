@@ -1,93 +1,339 @@
 {% extends "base.html" %}
 
-{% block title %}Add Item - Lost and Found{% endblock %}
+{% block title %}Report Item - Lost and Found{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6">
-        <div class="card shadow">
-            <div class="card-body">
-                <h2 class="card-title text-center mb-4">Report Item</h2>
-                <div class="d-flex justify-content-center mb-4">
-                    <button type="button" id="btnLost" class="btn btn-outline-danger me-2">Lost</button>
-                    <button type="button" id="btnFound" class="btn btn-outline-success">Found</button>
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10 col-xl-8">
+            <!-- Header Section -->
+            <div class="text-center mb-4">
+                <h1 class="display-6 fw-bold text-primary mb-3">
+                    <i class="bi bi-plus-circle me-2"></i>Report Item
+                </h1>
+                <p class="lead text-muted">Help reunite lost items with their owners by reporting found items, or find your lost belongings</p>
+            </div>
+
+            <!-- Status Selection -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-center">
+                    <h5 class="card-title mb-3">What would you like to report?</h5>
+                    <div class="btn-group" role="group" aria-label="Item status">
+                        <button type="button" id="btnLost" class="btn btn-outline-danger btn-lg px-4">
+                            <i class="bi bi-exclamation-triangle me-2"></i>Lost Item
+                        </button>
+                        <button type="button" id="btnFound" class="btn btn-outline-success btn-lg px-4">
+                            <i class="bi bi-check-circle me-2"></i>Found Item
+                        </button>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted" id="statusDescription">
+                            Select whether you've lost an item or found someone else's item
+                        </small>
+                    </div>
                 </div>
-                <form method="POST" action="{{ url_for('add_item') }}" enctype="multipart/form-data" class="needs-validation" novalidate>
-                    <div class="mb-3">
-                        <label for="image" class="form-label">Item Image</label>
-                        <div class="input-group mb-3">
-                            <span class="input-group-text"><i class="bi bi-image"></i></span>
-                            <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
-                            <div class="invalid-feedback">
-                                Please upload an image of the item.
+            </div>
+
+            <!-- Main Form Card -->
+            <div class="card shadow">
+                <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('add_item') }}" enctype="multipart/form-data" class="needs-validation" novalidate id="itemForm">
+                    <!-- Image Upload Section -->
+                    <div class="mb-4">
+                        <label for="image" class="form-label fw-bold">
+                            <i class="bi bi-camera me-2"></i>Item Image <span class="text-danger">*</span>
+                        </label>
+                        <div class="border rounded p-3 bg-light">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-image"></i></span>
+                                <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
+                                <div class="invalid-feedback">
+                                    Please upload an image of the item.
+                                </div>
+                            </div>
+                            <div class="form-text mt-2">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Upload a clear, well-lit image of the item. The system will automatically analyze and extract details like color, size, and type.
                             </div>
                         </div>
-                        <div id="imagePreviewContainer" class="d-none mb-3">
-                            <img id="imagePreview" src="#" alt="Image preview" class="img-fluid rounded" style="max-height: 300px; width: auto;">
+                        
+                        <!-- Image Preview -->
+                        <div id="imagePreviewContainer" class="d-none mt-3">
+                            <div class="text-center">
+                                <img id="imagePreview" src="#" alt="Image preview" class="img-fluid rounded shadow" style="max-height: 400px; width: auto;">
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="removeImage">
+                                        <i class="bi bi-trash me-1"></i>Remove Image
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-text">Upload a clear image of the item. The system will automatically analyze, classify, and extract color and size.</div>
                     </div>
 
-                    <div id="processingIndicator" class="alert alert-info d-none">
+                    <!-- AI Analysis Processing -->
+                    <div id="processingIndicator" class="alert alert-info d-none mb-4">
                         <div class="d-flex align-items-center">
-                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <div class="spinner-border spinner-border-sm me-3" role="status">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
-                            <span>Processing image and analyzing item...</span>
-                        </div>
-                    </div>
-
-                    <div id="extractedDetails" class="alert alert-success d-none mb-3">
-                        <h5 class="alert-heading">Item Analysis</h5>
-                        <div id="itemAnalysisList"></div>
-                        <!-- <div class="mb-3 mt-3">
-                            <label class="form-label">Description (auto-generated)</label>
-                            <div id="descriptionDisplay" class="border rounded bg-light p-2" style="min-height: 60px;"></div>
-                            <div class="form-text">This description is generated from the image and cannot be edited.</div>
-                        </div> -->
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="category" class="form-label">Category</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-grid"></i></span>
-                            <select class="form-select" id="category" name="category" required>
-                                <option value="">Select a category</option>
-                                <option value="electronics">Electronics</option>
-                                <option value="clothing">Clothing</option>
-                                <option value="accessories">Accessories</option>
-                                <option value="documents">Documents</option>
-                                <option value="other">Other</option>
-                            </select>
-                            <div class="invalid-feedback">
-                                Please select a category.
+                            <div>
+                                <h6 class="mb-1">AI Analysis in Progress</h6>
+                                <small>Processing image with R-CNN, RNN, and BERT models...</small>
                             </div>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="location" class="form-label" id="locationLabel">Location {{ 'Lost' if status == 'lost' else 'Found' }}</label>
+                    <!-- AI Analysis Results -->
+                    <div id="extractedDetails" class="alert alert-success d-none mb-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="bi bi-robot me-2 fs-4"></i>
+                            <h5 class="alert-heading mb-0">AI Analysis Results</h5>
+                        </div>
+                        <div id="itemAnalysisList"></div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-lightbulb me-1"></i>
+                                These details are automatically generated by our AI system. You can modify them below if needed.
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <!-- Basic Information Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="fw-bold text-primary mb-3">
+                                <i class="bi bi-info-circle me-2"></i>Basic Information
+                            </h5>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="category" class="form-label fw-bold">
+                                Category <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-grid"></i></span>
+                                <select class="form-select" id="category" name="category" required>
+                                    <option value="">Select a category</option>
+                                    <option value="electronics">Electronics</option>
+                                    <option value="clothing">Clothing</option>
+                                    <option value="accessories">Accessories</option>
+                                    <option value="documents">Documents</option>
+                                    <option value="jewelry">Jewelry</option>
+                                    <option value="keys">Keys</option>
+                                    <option value="bags">Bags & Backpacks</option>
+                                    <option value="books">Books & Media</option>
+                                    <option value="other">Other</option>
+                                </select>
+                                <div class="invalid-feedback">
+                                    Please select a category.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="brand" class="form-label fw-bold">Brand (optional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-tag"></i></span>
+                                <input type="text" class="form-control" id="brand" name="brand" 
+                                       placeholder="e.g., Apple, Samsung, Nike, etc.">
+                            </div>
+                            <div class="form-text">Enter the brand or manufacturer if known</div>
+                        </div>
+                    </div>
+
+                    <!-- Location Section -->
+                    <div class="mb-4">
+                        <label for="location" class="form-label fw-bold" id="locationLabel">
+                            <i class="bi bi-geo-alt me-2"></i>Location <span class="text-danger">*</span>
+                        </label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
                             <input type="text" class="form-control" id="location" name="location" required
-                                   placeholder="Enter the location where the item was {{ 'lost' if status == 'lost' else 'found' }}">
+                                   placeholder="Enter the location where the item was lost/found">
                             <div class="invalid-feedback">
                                 Please provide the location.
                             </div>
                         </div>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Be as specific as possible (e.g., "Main Street near Starbucks" instead of just "Main Street")
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="additional_notes" class="form-label">Additional information (optional)</label>
-                        <textarea class="form-control" id="additional_notes" name="additional_notes" rows="3" placeholder="e.g., case color, stickers, identifying marks, passcode hints, etc."></textarea>
-                        <small class="form-text text-muted">Avoid sharing sensitive personal information.</small>
+                    <!-- Description Editor Section -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">
+                                <i class="bi bi-pencil-square me-2"></i>Item Description
+                                <span class="badge bg-light text-primary ms-2">AI Enhanced</span>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="description" class="form-label fw-bold">
+                                    <i class="bi bi-chat-text me-1"></i>Description
+                                    <span class="text-danger">*</span>
+                                </label>
+                                <textarea class="form-control" id="description" name="description" 
+                                          rows="4" required 
+                                          placeholder="Enter a detailed description of the item... (AI will enhance this)"></textarea>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Provide a basic description. Our AI will enhance it with detailed analysis after image processing.
+                                </div>
+                            </div>
+
+                            <!-- Description Enhancement Tools -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-outline-success btn-sm" id="addKeywordsBtn">
+                                        <i class="bi bi-tags me-1"></i>Add Keywords
+                                    </button>
+                                    <button type="button" class="btn btn-outline-warning btn-sm ms-2" id="improveDescBtn">
+                                        <i class="bi bi-arrow-up-circle me-1"></i>Improve
+                                    </button>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="previewDescBtn">
+                                        <i class="bi bi-eye me-1"></i>Preview
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm ms-2" id="aiSuggestBtn">
+                                        <i class="bi bi-magic me-1"></i>AI Suggestions
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Character Count -->
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <span id="descCharCount">0</span> characters
+                                    <span class="ms-3">
+                                        <span id="descWordCount">0</span> words
+                                    </span>
+                                </small>
+                            </div>
+
+                            <!-- AI Enhanced Description (shown after image processing) -->
+                            <div id="aiEnhancedDescription" class="d-none">
+                                <div class="alert alert-info">
+                                    <h6 class="fw-bold mb-2">
+                                        <i class="bi bi-robot me-2"></i>AI Enhanced Description
+                                        <button class="btn btn-sm btn-outline-primary ms-2" type="button" id="useEnhancedBtn">
+                                            <i class="bi bi-arrow-down-circle me-1"></i>Use This
+                                        </button>
+                                    </h6>
+                                    <p id="enhancedDescriptionText" class="mb-0"></p>
+                                </div>
+                            </div>
+
+                            <!-- Description Tips -->
+                            <div class="alert alert-light">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="bi bi-lightbulb me-2"></i>Description Tips
+                                </h6>
+                                <ul class="mb-0 small">
+                                    <li><strong>Be specific:</strong> Include brand, model, color, size, and material</li>
+                                    <li><strong>Mention unique features:</strong> Scratches, stickers, engravings, or distinctive marks</li>
+                                    <li><strong>Include condition:</strong> New, used, worn, damaged, etc.</li>
+                                    <li><strong>Add context:</strong> Where it was found/lost, any accessories included</li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
 
+                    <!-- Contact Information Section -->
+                    <div class="card mb-4" id="contactSection">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">
+                                <i class="bi bi-telephone me-2"></i>Contact Information
+                                <span class="badge bg-light text-primary ms-2">Recommended</span>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Lost Item - Owner Contact Information -->
+                            <div id="lostContactInfo" class="d-none">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-person me-2"></i>Your Contact Information
+                                </h6>
+                                <p class="text-muted mb-3">Provide your contact details so people can reach you if they find your lost item.</p>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="owner_contact" class="form-label fw-bold">
+                                            <i class="bi bi-phone me-1"></i>Your Phone Number
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                                            <input type="tel" class="form-control" id="owner_contact" name="owner_contact" 
+                                                   placeholder="e.g., (555) 123-4567">
+                                        </div>
+                                        <div class="form-text">Your contact number for this lost item</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="owner_email" class="form-label fw-bold">
+                                            <i class="bi bi-envelope me-1"></i>Your Email Address
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                            <input type="email" class="form-control" id="owner_email" name="owner_email" 
+                                                   placeholder="e.g., your.email@example.com">
+                                        </div>
+                                        <div class="form-text">Your email for notifications</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Found Item - Finder Contact Information -->
+                            <div id="foundContactInfo" class="d-none">
+                                <h6 class="fw-bold text-primary mb-3">
+                                    <i class="bi bi-search me-2"></i>Your Contact Information
+                                </h6>
+                                <p class="text-muted mb-3">Provide your contact details so the owner can reach you to arrange item return.</p>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="finder_contact" class="form-label fw-bold">
+                                            <i class="bi bi-phone me-1"></i>Your Phone Number
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                                            <input type="tel" class="form-control" id="finder_contact" name="finder_contact" 
+                                                   placeholder="e.g., (555) 123-4567">
+                                        </div>
+                                        <div class="form-text">Your contact number for this found item</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="finder_email" class="form-label fw-bold">
+                                            <i class="bi bi-envelope me-1"></i>Your Email Address
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                            <input type="email" class="form-control" id="finder_email" name="finder_email" 
+                                                   placeholder="e.g., your.email@example.com">
+                                        </div>
+                                        <div class="form-text">Your email for notifications</div>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Privacy Note:</strong> Contact information is only visible to users involved in potential matches. 
+                                At least one contact method is recommended to help facilitate item returns.
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Hidden Fields -->
                     <input type="hidden" name="status" id="statusInput" value="{{ status }}">
                     <input type="hidden" name="title" id="itemTitle">
 
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">Submit Report</button>
+                    <!-- Form Actions -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <button type="button" class="btn btn-outline-secondary me-md-2" id="resetForm">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Reset Form
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-lg px-5" id="submitBtn">
+                            <i class="bi bi-check-circle me-2"></i>Submit Report
+                        </button>
                     </div>
                 </form>
             </div>
@@ -95,9 +341,32 @@
     </div>
 </div>
 
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="successModalLabel">
+                    <i class="bi bi-check-circle me-2"></i>Report Submitted Successfully!
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                <h6 class="mt-3">Thank you for your report!</h6>
+                <p class="text-muted">Your item has been added to our database. We'll notify you if a match is found.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" data-bs-dismiss="modal">Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form');
+    // Form elements
+    const form = document.getElementById('itemForm');
     const imageInput = document.getElementById('image');
     const imagePreview = document.getElementById('imagePreview');
     const imagePreviewContainer = document.getElementById('imagePreviewContainer');
@@ -109,20 +378,69 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnFound = document.getElementById('btnFound');
     const statusInput = document.getElementById('statusInput');
     const locationLabel = document.getElementById('locationLabel');
+    const statusDescription = document.getElementById('statusDescription');
+    const submitBtn = document.getElementById('submitBtn');
+    const resetBtn = document.getElementById('resetForm');
+    const removeImageBtn = document.getElementById('removeImage');
 
-    // Form validation
+    // Enhanced form validation
     form.addEventListener('submit', function(event) {
         if (!form.checkValidity()) {
             event.preventDefault();
             event.stopPropagation();
+            // Scroll to first invalid field
+            const firstInvalid = form.querySelector(':invalid');
+            if (firstInvalid) {
+                firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstInvalid.focus();
+            }
+        } else {
+            // Show loading state on submit button
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Submitting...';
+            submitBtn.disabled = true;
         }
         form.classList.add('was-validated');
     });
 
-    // Image preview
+    // Reset form functionality
+    resetBtn.addEventListener('click', function() {
+        if (confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
+            form.reset();
+            form.classList.remove('was-validated');
+            imagePreviewContainer.classList.add('d-none');
+            extractedDetails.classList.add('d-none');
+            updateStatusButtons('lost');
+            submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Submit Report';
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Remove image functionality
+    removeImageBtn.addEventListener('click', function() {
+        imageInput.value = '';
+        imagePreviewContainer.classList.add('d-none');
+        extractedDetails.classList.add('d-none');
+    });
+
+    // Enhanced image preview and processing
     imageInput.addEventListener('change', function() {
         if (this.files && this.files[0]) {
             const file = this.files[0];
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                alert('Please select a valid image file.');
+                this.value = '';
+                return;
+            }
+            
+            // Validate file size (max 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Image file is too large. Please select an image smaller than 10MB.');
+                this.value = '';
+                return;
+            }
+            
             const reader = new FileReader();
             
             reader.onload = function(e) {
@@ -144,7 +462,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 processingIndicator.classList.add('d-none');
 
@@ -153,50 +476,103 @@ document.addEventListener('DOMContentLoaded', function() {
                     extractedDetails.classList.remove('d-none');
                     const itemAnalysisList = document.getElementById('itemAnalysisList');
                     itemAnalysisList.innerHTML = '';
+                    
                     data.items.forEach((item, idx) => {
+                        const confidence = item.confidence ? ` (${Math.round(item.confidence * 100)}% confidence)` : '';
                         itemAnalysisList.innerHTML += `
-                            <div style=\"margin-bottom: 1em; border-bottom:1px solid #eee;\">
-                                <strong>Item ${idx + 1}</strong><br>
-                                <b>Type:</b> ${item.item_type || ''}<br>
-                                <b>Color:</b> ${item.color || ''}<br>
-                                <b>Size:</b> ${item.size || ''}<br>
-                                <b>Description:</b> ${item.description || ''}<br>
+                            <div class="border rounded p-3 mb-3 bg-white">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="mb-0 text-primary">Item ${idx + 1}${confidence}</h6>
+                                    <span class="badge bg-success">AI Detected</span>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Type:</small><br>
+                                        <strong>${item.item_type || 'Unknown'}</strong>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Color:</small><br>
+                                        <strong>${item.color || 'Unknown'}</strong>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Size:</small><br>
+                                        <strong>${item.size || 'Unknown'}</strong>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Category:</small><br>
+                                        <strong>${item.category || 'Unknown'}</strong>
+                                    </div>
+                                </div>
+                                <div class="mt-2" data-description="${item.description || 'No description available'}">
+                                    <small class="text-muted">Description:</small><br>
+                                    <em>${item.description || 'No description available'}</em>
+                                </div>
                             </div>
                         `;
                     });
-                    // Optionally set the first item's type as the hidden title
-                    itemTitle.value = data.items[0].item_type || '';
-                    // Optionally auto-select the category of the first item
+                    
+                    // Auto-fill form fields
+                    itemTitle.value = data.items[0].item_type || 'Unknown Item';
                     if (data.items[0].category) {
                         categorySelect.value = data.items[0].category;
                     }
                 } else {
                     extractedDetails.classList.remove('d-none');
                     const itemAnalysisList = document.getElementById('itemAnalysisList');
-                    itemAnalysisList.innerHTML = '<i>No items detected.</i>';
-                    itemTitle.value = '';
+                    itemAnalysisList.innerHTML = `
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-exclamation-triangle fs-1"></i>
+                            <p class="mt-2">No items detected in the image.</p>
+                            <small>Please try uploading a clearer image or manually fill in the details below.</small>
+                        </div>
+                    `;
+                    itemTitle.value = 'Unknown Item';
                 }
             })
             .catch(error => {
-                console.error('Error in fetch:', error);
+                console.error('Error processing image:', error);
                 processingIndicator.classList.add('d-none');
+                extractedDetails.classList.remove('d-none');
+                const itemAnalysisList = document.getElementById('itemAnalysisList');
+                itemAnalysisList.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Error processing image. Please try again or fill in the details manually.
+                    </div>
+                `;
+                // Set default title for error case
+                itemTitle.value = 'Unknown Item';
             });
         }
     });
 
     function updateStatusButtons(selected) {
+        // Get contact information sections
+        const lostContactInfo = document.getElementById('lostContactInfo');
+        const foundContactInfo = document.getElementById('foundContactInfo');
+        
         if (selected === 'lost') {
             btnLost.classList.add('active', 'btn-danger');
             btnLost.classList.remove('btn-outline-danger');
             btnFound.classList.remove('active', 'btn-success');
             btnFound.classList.add('btn-outline-success');
-            locationLabel.textContent = 'Location Lost';
+            locationLabel.innerHTML = '<i class="bi bi-geo-alt me-2"></i>Location Lost <span class="text-danger">*</span>';
+            statusDescription.textContent = 'You have lost an item and want to find it';
+            
+            // Show owner contact info for lost items
+            if (lostContactInfo) lostContactInfo.classList.remove('d-none');
+            if (foundContactInfo) foundContactInfo.classList.add('d-none');
         } else {
             btnFound.classList.add('active', 'btn-success');
             btnFound.classList.remove('btn-outline-success');
             btnLost.classList.remove('active', 'btn-danger');
             btnLost.classList.add('btn-outline-danger');
-            locationLabel.textContent = 'Location Found';
+            locationLabel.innerHTML = '<i class="bi bi-geo-alt me-2"></i>Location Found <span class="text-danger">*</span>';
+            statusDescription.textContent = 'You have found someone else\'s item and want to return it';
+            
+            // Show finder contact info for found items
+            if (foundContactInfo) foundContactInfo.classList.remove('d-none');
+            if (lostContactInfo) lostContactInfo.classList.add('d-none');
         }
     }
 
@@ -207,9 +583,253 @@ document.addEventListener('DOMContentLoaded', function() {
         statusInput.value = 'lost';
         updateStatusButtons('lost');
     });
+    
     btnFound.addEventListener('click', function() {
         statusInput.value = 'found';
         updateStatusButtons('found');
+    });
+
+    // Real-time form validation
+    const requiredFields = form.querySelectorAll('[required]');
+    requiredFields.forEach(field => {
+        field.addEventListener('blur', function() {
+            if (this.value.trim() === '') {
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            }
+        });
+    });
+
+    // Phone number formatting
+    const phoneInputs = document.querySelectorAll('input[type="tel"]');
+    phoneInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            let value = this.value.replace(/\D/g, '');
+            if (value.length >= 10) {
+                value = value.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+            }
+            this.value = value;
+        });
+    });
+
+    // Email validation
+    const emailInputs = document.querySelectorAll('input[type="email"]');
+    emailInputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (this.value && !emailRegex.test(this.value)) {
+                this.classList.add('is-invalid');
+                this.classList.remove('is-valid');
+            } else if (this.value) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            }
+        });
+    });
+
+    // Auto-save form data to localStorage
+    const formInputs = form.querySelectorAll('input, textarea, select');
+    formInputs.forEach(input => {
+        // Load saved data
+        const savedValue = localStorage.getItem(`form_${input.name}`);
+        if (savedValue && input.type !== 'file') {
+            input.value = savedValue;
+        }
+
+        // Save data on change
+        input.addEventListener('input', function() {
+            if (this.type !== 'file') {
+                localStorage.setItem(`form_${this.name}`, this.value);
+            }
+        });
+    });
+
+    // Clear saved data on successful submit
+    form.addEventListener('submit', function() {
+        formInputs.forEach(input => {
+            if (input.type !== 'file') {
+                localStorage.removeItem(`form_${input.name}`);
+            }
+        });
+    });
+
+    // Description Editor Functionality
+    const descriptionTextarea = document.getElementById('description');
+    const descCharCount = document.getElementById('descCharCount');
+    const descWordCount = document.getElementById('descWordCount');
+    const aiEnhancedDescription = document.getElementById('aiEnhancedDescription');
+    const enhancedDescriptionText = document.getElementById('enhancedDescriptionText');
+    const useEnhancedBtn = document.getElementById('useEnhancedBtn');
+
+    // Character and word counting for description
+    function updateDescCounts() {
+        const text = descriptionTextarea.value;
+        const chars = text.length;
+        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+        
+        descCharCount.textContent = chars;
+        descWordCount.textContent = words;
+        
+        // Visual feedback for length
+        if (chars < 50) {
+            descCharCount.className = 'text-warning';
+        } else if (chars < 200) {
+            descCharCount.className = 'text-info';
+        } else {
+            descCharCount.className = 'text-success';
+        }
+    }
+
+    descriptionTextarea.addEventListener('input', updateDescCounts);
+    updateDescCounts(); // Initial count
+
+    // Auto-resize textarea
+    descriptionTextarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Description enhancement tools
+    document.getElementById('addKeywordsBtn').addEventListener('click', function() {
+        const currentText = descriptionTextarea.value;
+        const keywords = prompt('Enter keywords to add (separated by commas):');
+        if (keywords && keywords.trim()) {
+            const keywordList = keywords.split(',').map(k => k.trim()).filter(k => k);
+            const newText = currentText + ' Keywords: ' + keywordList.join(', ');
+            descriptionTextarea.value = newText;
+            updateDescCounts();
+        }
+    });
+
+    document.getElementById('improveDescBtn').addEventListener('click', function() {
+        const currentText = descriptionTextarea.value;
+        if (currentText.length < 20) {
+            alert('Please write a longer description before using the improve feature.');
+            return;
+        }
+        
+        // Simple improvement suggestions
+        let improved = currentText;
+        
+        // Add condition if not mentioned
+        if (!improved.toLowerCase().includes('condition') && !improved.toLowerCase().includes('used') && !improved.toLowerCase().includes('new')) {
+            improved += ' The item appears to be in good condition.';
+        }
+        
+        // Add size if not mentioned
+        if (!improved.toLowerCase().includes('size') && !improved.toLowerCase().includes('small') && !improved.toLowerCase().includes('large')) {
+            improved += ' Size details not specified.';
+        }
+        
+        // Add material if not mentioned
+        if (!improved.toLowerCase().includes('material') && !improved.toLowerCase().includes('plastic') && !improved.toLowerCase().includes('metal') && !improved.toLowerCase().includes('fabric')) {
+            improved += ' Material not specified.';
+        }
+        
+        descriptionTextarea.value = improved;
+        updateDescCounts();
+    });
+
+    document.getElementById('previewDescBtn').addEventListener('click', function() {
+        const description = descriptionTextarea.value;
+        if (!description.trim()) {
+            alert('Please enter a description to preview.');
+            return;
+        }
+        
+        // Create preview modal
+        const previewModal = document.createElement('div');
+        previewModal.className = 'modal fade';
+        previewModal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Description Preview</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <h6>How your description will appear:</h6>
+                        <div class="border p-3 rounded bg-light">
+                            <p class="mb-0">${description.replace(/\n/g, '<br>')}</p>
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <strong>Length:</strong> ${description.length} characters, ${description.trim().split(/\s+/).length} words
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(previewModal);
+        const modal = new bootstrap.Modal(previewModal);
+        modal.show();
+        
+        // Clean up when modal is hidden
+        previewModal.addEventListener('hidden.bs.modal', function() {
+            document.body.removeChild(previewModal);
+        });
+    });
+
+    document.getElementById('aiSuggestBtn').addEventListener('click', function() {
+        alert('AI suggestions will be available after image processing. Upload an image first!');
+    });
+
+    // Use enhanced description button
+    useEnhancedBtn.addEventListener('click', function() {
+        const enhancedText = enhancedDescriptionText.textContent;
+        if (enhancedText) {
+            descriptionTextarea.value = enhancedText;
+            updateDescCounts();
+            aiEnhancedDescription.classList.add('d-none');
+        }
+    });
+
+    // Update the image processing to show enhanced description
+    const originalProcessImage = processImage;
+    window.processImage = function() {
+        originalProcessImage();
+        
+        // After image processing, show enhanced description if available
+        setTimeout(() => {
+            const analysisResults = document.querySelectorAll('[data-description]');
+            if (analysisResults.length > 0) {
+                const description = analysisResults[0].getAttribute('data-description');
+                if (description && description !== 'No description available') {
+                    enhancedDescriptionText.textContent = description;
+                    aiEnhancedDescription.classList.remove('d-none');
+                }
+            }
+        }, 1000);
+    };
+
+    // Auto-save description draft
+    let saveTimeout;
+    descriptionTextarea.addEventListener('input', function() {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            localStorage.setItem('description_draft', this.value);
+        }, 2000);
+    });
+
+    // Load draft on page load
+    const draft = localStorage.getItem('description_draft');
+    if (draft && draft !== descriptionTextarea.value) {
+        if (confirm('You have a saved description draft. Would you like to load it?')) {
+            descriptionTextarea.value = draft;
+            updateDescCounts();
+        }
+    }
+
+    // Clear draft on successful form submission
+    document.getElementById('addItemForm').addEventListener('submit', function() {
+        localStorage.removeItem('description_draft');
     });
 });
 </script>

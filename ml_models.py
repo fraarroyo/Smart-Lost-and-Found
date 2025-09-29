@@ -27,19 +27,17 @@ class UnifiedModel:
         # Initialize device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Initialize object detection model (prefer trained checkpoint if available)
+        # Initialize object detection model using best_model1.pth
         self.label_names = {}
         self.score_threshold = float(os.getenv('SCORE_THRESH', '0.5'))
         self.object_model = self._load_trained_detector_or_default()
         self.object_model.to(self.device)
         self.object_model.eval()
         
-        # Initialize text analysis model
-        # Use slow (pure-Python) tokenizer to avoid building Rust wheels on deployment
-        self.text_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', use_fast=False)
-        self.text_model = BertModel.from_pretrained('bert-base-uncased')
-        self.text_model.to(self.device)
-        self.text_model.eval()
+        # Lazy load text analysis model - only load when needed
+        self.text_tokenizer = None
+        self.text_model = None
+        self._text_model_loaded = False
         
         # Unified training data storage
         self.training_data = []
@@ -71,6 +69,11 @@ class UnifiedModel:
             'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
             'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
         ]
+        
+        # Dynamic COCO category mappings (from dataset annotations when available)
+        self.coco_id_to_name = {}
+        self.coco_name_to_id = {}
+        self._load_coco_categories_from_annotations()
         
         # Load existing training data and adjustments
         self.load_training_data()
@@ -126,7 +129,7 @@ class UnifiedModel:
                 self.checkpoint_model.eval()
                 self.logger.info("Loaded checkpoint model successfully")
             else:
-                self.logger.warning(f"Checkpoint file not found at {self.checkpoint_path}")
+                # Checkpoint is optional, so just set to None without warning
                 self.checkpoint_model = None
         except Exception as e:
             self.logger.error(f"Error loading checkpoint model: {e}")
@@ -154,13 +157,39 @@ class UnifiedModel:
             self.confidence_adjustments = {}
             self.similarity_adjustments = {}
 
+    def _ensure_text_model_loaded(self):
+        """Lazy load text analysis model only when needed"""
+        if not self._text_model_loaded:
+            try:
+                self.logger.info("Loading BERT model for text analysis...")
+                # Use slow (pure-Python) tokenizer to avoid building Rust wheels on deployment
+                self.text_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', use_fast=False)
+                self.text_model = BertModel.from_pretrained('bert-base-uncased')
+                self.text_model.to(self.device)
+                self.text_model.eval()
+                self._text_model_loaded = True
+                self.logger.info("BERT model loaded successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to load BERT model: {e}")
+                raise e
+
     def _load_trained_detector_or_default(self):
-        """Load a FasterRCNN detector from a checkpoint with label names if available."""
+        """Load a FasterRCNN detector. If USE_WEB_DETECTOR is set, always use COCO web weights."""
         try:
-            # Resolve checkpoint path from env or default under this project
+            # If flagged, force using web (COCO) detector and ignore checkpoints
+            if str(os.getenv('USE_WEB_DETECTOR', '')).lower() in ['1', 'true', 'yes']:
+                try:
+                    weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
+                except Exception:
+                    weights = None
+                model = fasterrcnn_resnet50_fpn(weights=weights, box_score_thresh=self.score_threshold)
+                self.logger.info("Using web (COCO) detector as requested via USE_WEB_DETECTOR")
+                return model
+
+            # Use best_model1.pth as the primary model
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            default_ckpt = os.path.join(base_dir, 'outputs', 'best_model.pth')
-            ckpt_path = os.getenv('BEST_MODEL', default_ckpt)
+            best_model_1 = os.path.join(base_dir, 'best_model1.pth')
+            ckpt_path = os.getenv('BEST_MODEL1', best_model_1)
 
             # Build model with torchvision weights and configured score threshold
             weights = None
@@ -178,6 +207,9 @@ class UnifiedModel:
                 if isinstance(label_names, dict):
                     # keys may be tensors; normalize to int
                     self.label_names = {int(k): v for k, v in label_names.items()}
+                    # Add background class (0) if missing
+                    if 0 not in self.label_names:
+                        self.label_names[0] = 'background'
                 elif isinstance(label_names, list):
                     self.label_names = {i: n for i, n in enumerate(label_names)}
                 else:
@@ -198,7 +230,7 @@ class UnifiedModel:
                 return model
 
             # Fallback: COCO-pretrained model
-            self.logger.warning(f"BEST_MODEL checkpoint not found at {ckpt_path}; using COCO-pretrained model")
+            self.logger.warning(f"best_model1.pth not found at {ckpt_path}; using COCO-pretrained model")
             return model
         except Exception as e:
             self.logger.error(f"Failed to load trained detector, using default COCO model: {e}")
@@ -206,6 +238,37 @@ class UnifiedModel:
                 return fasterrcnn_resnet50_fpn(pretrained=True)
             except Exception:
                 return fasterrcnn_resnet50_fpn()
+
+    def _load_coco_categories_from_annotations(self):
+        """Attempt to load COCO categories from an annotation JSON specified via env or default dataset.
+        Env:
+        - COCO_ANN_FILE: absolute or relative path to _annotations.coco.json
+        - COCO_DATASET_ROOT: if COCO_ANN_FILE not set, will look under this root for 'train/valid/test/_annotations.coco.json'
+        """
+        try:
+            ann_path = os.getenv('COCO_ANN_FILE')
+            if ann_path and os.path.isfile(ann_path):
+                path = ann_path
+            else:
+                # Try to discover from default dataset structure
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                dataset_root = os.getenv('COCO_DATASET_ROOT', os.path.join(base_dir, 'image recog.v1i.coco-mmdetection'))
+                candidates = [
+                    os.path.join(dataset_root, split, '_annotations.coco.json')
+                    for split in ['train', 'valid', 'test']
+                ]
+                path = next((p for p in candidates if os.path.isfile(p)), None)
+            if not path:
+                return
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            cats = data.get('categories', [])
+            self.coco_id_to_name = {int(c['id']): str(c['name']) for c in cats}
+            self.coco_name_to_id = {str(v).lower(): int(k) for k, v in self.coco_id_to_name.items()}
+            if self.coco_id_to_name:
+                self.logger.info(f"Loaded {len(self.coco_id_to_name)} COCO categories from annotations")
+        except Exception as e:
+            self.logger.warning(f"Could not load COCO categories from annotations: {e}")
 
     def save_adjustments(self):
         """Save confidence and similarity adjustments."""
@@ -300,7 +363,7 @@ class UnifiedModel:
     def predict_with_checkpoint(self, image_path):
         """Use the checkpoint model for prediction on an image."""
         if self.checkpoint_model is None:
-            self.logger.warning("Checkpoint model not loaded")
+            # Silently return None if checkpoint model is not available
             return None
         
         try:
@@ -509,37 +572,14 @@ class UnifiedModel:
                 
                 obj = {
                     'class': obj_class,
+                    'label': int(label),
                     'confidence': adjusted_confidence,
                     'original_confidence': original_confidence,
                     'box': [float(b) for b in box]
                 }
                 
-                # If it's a cell phone, analyze specific features
-                if str(obj_class).lower() in ['cell phone', 'cellphone', 'smartphone', 'phone']:
-                    x1, y1, x2, y2 = map(int, box)
-                    h, w = cv_image.shape[:2]
-                    x1, y1 = max(0, x1), max(0, y1)
-                    x2, y2 = min(w, x2), min(h, y2)
-                    if x2 > x1 and y2 > y1:
-                        roi = cv_image[y1:y2, x1:x2]
-                        if roi.size > 0:
-                            avg_color = np.mean(roi, axis=(0,1))
-                            obj['color'] = {
-                                'B': int(avg_color[0]),
-                                'G': int(avg_color[1]),
-                                'R': int(avg_color[2])
-                            }
-                            
-                            if circles is not None:
-                                obj['features'] = ['dual_camera_detected']
-                            
-                            blue_mask = cv2.inRange(roi, 
-                                                  np.array([100, 0, 0]), 
-                                                  np.array([255, 100, 100]))
-                            if np.sum(blue_mask) > 100:
-                                if 'features' not in obj:
-                                    obj['features'] = []
-                                obj['features'].append('fingerprint_sensor_detected')
+                # Color analysis disabled for maximum speed
+                # No color analysis performed
                 
                 detected_objects.append(obj)
 
@@ -550,8 +590,43 @@ class UnifiedModel:
             self.logger.error(f'Error processing image {image_path}: {e}', exc_info=True)
             return {'error': f'Error processing image: {str(e)}'}
 
+    def export_coco_results(self, image_id: int, detections):
+        """Convert internal detections to COCO results entries for a single image.
+        Each detection should contain 'class' (name), 'label' (int), 'confidence', and 'box' [x1,y1,x2,y2].
+        Uses loaded COCO categories if available; skips classes not present.
+        """
+        results = []
+        try:
+            for d in detections or []:
+                cls_name = str(d.get('class', '')).lower()
+                category_id = self.coco_name_to_id.get(cls_name)
+                if category_id is None:
+                    # Try numeric fallback
+                    lbl = d.get('label', None)
+                    if isinstance(lbl, (int, np.integer)) and lbl in self.coco_id_to_name:
+                        category_id = int(lbl)
+                if category_id is None:
+                    continue
+                box = d.get('box', None)
+                if not box or len(box) != 4:
+                    continue
+                x1, y1, x2, y2 = map(float, box)
+                xywh = [x1, y1, max(0.0, x2 - x1), max(0.0, y2 - y1)]
+                results.append({
+                    'image_id': int(image_id),
+                    'category_id': int(category_id),
+                    'bbox': xywh,
+                    'score': float(d.get('confidence', 0.0)),
+                })
+        except Exception as e:
+            self.logger.error(f"Error exporting COCO results: {e}")
+        return results
+
     def analyze_text(self, text):
         """Analyze text with unified model."""
+        # Lazy load text model only when needed
+        self._ensure_text_model_loaded()
+        
         inputs = self.text_tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
@@ -697,7 +772,7 @@ class UnifiedModel:
         if self.checkpoint_model is None:
             return {
                 'loaded': False,
-                'error': 'Checkpoint model not loaded'
+                'status': 'Checkpoint model not available (optional)'
             }
         
         try:

@@ -1,14 +1,31 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_mail import Mail, Message
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 import uuid
-from functools import wraps
+import time
+import signal
+from functools import wraps, lru_cache
 import json
 import secrets
+
+def guest_restricted(f):
+    """Decorator to restrict guest users from certain actions"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if current_user.is_authenticated and current_user.is_guest:
+            flash('This feature is not available for guest users. Please register for a full account.', 'warning')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
 from itsdangerous import URLSafeTimedSerializer
 from PIL import Image, ImageDraw
 from collections import Counter
@@ -39,6 +56,14 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)  # Remember me duration
 app.config['SECURITY_PASSWORD_SALT'] = secrets.token_hex(16)  # For password reset tokens
 
+# Email configuration
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'smartlostandfound@gmail.com')
+
 # Training data directories
 TRAINING_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'training_data')
 TRAINING_IMAGES_DIR = os.path.join(TRAINING_DATA_DIR, 'images')
@@ -51,61 +76,34 @@ os.makedirs(TRAINING_IMAGES_DIR, exist_ok=True)
 os.makedirs(TRAINING_LABELS_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-try:
-    from ml_models import ObjectDetector, TextAnalyzer, SequenceProcessor
-except ImportError:
-    # Dummy ML model classes for when torch/ML dependencies are not available
-    class ObjectDetector:
-        def detect_objects(self, image_path):
-            return []
+# Import ML models - these are required for the application to function
+# Import will be handled in the try block below
 
-    class TextAnalyzer:
-        def analyze_text(self, text):
-            return []
-            
-        def compute_similarity(self, text1, text2):
-            return 0.0
+# Use the custom best_model1.pth checkpoint for object detection
+# Clear any environment variables that might interfere with custom model loading
+os.environ.pop('USE_WEB_DETECTOR', None)
+# Keep BEST_MODEL1 to use best_model1.pth
 
-    class SequenceProcessor:
-        def process(self, sequence):
-            return []
-
-# Force the whole system to use the COCO web detector instead of any local .pth
-os.environ['USE_WEB_DETECTOR'] = 'true'
-# Optional: clear BEST_MODEL so loaders don't consider a local checkpoint
-os.environ.pop('BEST_MODEL', None)
+# Set ultra_fast processing mode for maximum speed
+os.environ['PROCESSING_MODE'] = 'ultra_fast'
+os.environ['ENABLE_TRAINING'] = 'false'  # Disable training for speed
 
 # Initialize unified ML model
 try:
-    from ml_models import UnifiedModel, ModelTrainer
+    from ml_models import UnifiedModel, ObjectDetector, TextAnalyzer, ModelTrainer, SequenceProcessor
+    from rnn_models import rnn_manager
+    from image_rnn_analyzer import image_rnn_analyzer
+    from enhanced_image_processor import enhanced_image_processor
     unified_model = UnifiedModel()
     object_detector = unified_model  # For backward compatibility
     text_analyzer = TextAnalyzer()  # Uses unified model internally
     model_trainer = ModelTrainer()  # Uses unified model internally
-except ImportError:
-    # Dummy models for when ML dependencies are not available
-    class UnifiedModel:
-        def detect_objects(self, image_path):
-            return []
-        def analyze_text(self, text):
-            return []
-        def compute_similarity(self, text1, text2):
-            return 0.0
-    
-    class ModelTrainer:
-        def add_feedback(self, *args, **kwargs):
-            return True
-        def add_text_feedback(self, *args, **kwargs):
-            return True
-        def retrain_models(self):
-            return True
-        def get_training_statistics(self):
-            return {'total_training_samples': 0}
-    
-    unified_model = UnifiedModel()
-    object_detector = unified_model
-    text_analyzer = TextAnalyzer()
-    model_trainer = ModelTrainer()
+    sequence_processor = SequenceProcessor()  # For sequence processing
+except ImportError as e:
+    # ML dependencies are required - fail fast if not available
+    print(f"ERROR: Required ML dependencies not available: {e}")
+    print("Please install required packages: pip install -r requirements.txt")
+    raise e
 
 sequence_processor = SequenceProcessor()
 
@@ -117,8 +115,52 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Initialize Flask-Mail
+mail = Mail(app)
+
+# Initialize email service
+from email_service import init_email_service, get_email_service
+init_email_service(mail)
+
 # Initialize password reset serializer
 serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+# Analysis result cache to improve performance
+analysis_cache = {}
+CACHE_MAX_SIZE = 100
+CACHE_TTL = 3600  # 1 hour in seconds
+
+def get_cache_key(image_path):
+    """Generate cache key for image analysis"""
+    try:
+        with open(image_path, 'rb') as f:
+            file_hash = hashlib.md5(f.read()).hexdigest()
+        return f"analysis_{file_hash}"
+    except:
+        return f"analysis_{os.path.basename(image_path)}_{os.path.getmtime(image_path)}"
+
+def get_cached_analysis(image_path):
+    """Get cached analysis result if available and not expired"""
+    cache_key = get_cache_key(image_path)
+    if cache_key in analysis_cache:
+        result, timestamp = analysis_cache[cache_key]
+        if time.time() - timestamp < CACHE_TTL:
+            return result
+        else:
+            # Remove expired entry
+            del analysis_cache[cache_key]
+    return None
+
+def cache_analysis_result(image_path, result):
+    """Cache analysis result"""
+    cache_key = get_cache_key(image_path)
+    
+    # Remove oldest entries if cache is full
+    if len(analysis_cache) >= CACHE_MAX_SIZE:
+        oldest_key = min(analysis_cache.keys(), key=lambda k: analysis_cache[k][1])
+        del analysis_cache[oldest_key]
+    
+    analysis_cache[cache_key] = (result, time.time())
 
 # Add these mappings at the top of the file after imports
 ITEM_CATEGORY_MAPPINGS = {
@@ -222,29 +264,92 @@ def is_item_damaged(image_path, box=None):
     # For now, always return None (unknown)
     return None
 
-def generate_description(detected_objects, color=None, size=None, category=None, location=None, crack_status=None, damage_status=None):
+def generate_description(detected_objects, color=None, size=None, category=None, location=None, crack_status=None, damage_status=None, rnn_analysis=None):
     """Generate a detailed natural language description from the most relevant detected object and attributes."""
     if not detected_objects:
         return "No objects detected in the image."
+    
     best_obj = max(detected_objects, key=lambda x: x['confidence'])
     cls = best_obj['class'].replace('_', ' ').title()
     confidence = best_obj.get('confidence', 0)
-    desc_parts = []
-    if size:
-        desc_parts.append(size.title())
-    if color:
-        desc_parts.append(color.title())
-    desc_parts.append(cls)
-    if category:
-        desc_parts.append(f"({category.title()} category)")
-    desc = " ".join(desc_parts)
-    desc += f", detected with {confidence*100:.0f}% confidence."
+    
+    # Use RNN analysis if available for enhanced description
+    if rnn_analysis and rnn_analysis.get('details'):
+        rnn_details = rnn_analysis['details']
+        
+        # Build enhanced description using RNN analysis
+        desc_parts = []
+        
+        # Size from RNN or fallback
+        if rnn_details.get('size') and rnn_details['size'] != 'unknown':
+            size_str = rnn_details['size'].replace('_', ' ').title()
+            desc_parts.append(size_str)
+        elif size:
+            desc_parts.append(size.title())
+        
+        # Colors from RNN or fallback
+        if rnn_details.get('colors'):
+            color_str = ', '.join(rnn_details['colors'][:2]).title()
+            desc_parts.append(color_str)
+        elif color:
+            desc_parts.append(color.title())
+        
+        # Material from RNN
+        if rnn_details.get('materials') and rnn_details['materials'][0] != 'unknown':
+            material_str = rnn_details['materials'][0].replace('_', ' ').title()
+            desc_parts.append(material_str)
+        
+        # Item type
+        desc_parts.append(cls)
+        
+        # Brand from RNN
+        if rnn_details.get('brands') and rnn_details['brands'][0] != 'unknown':
+            brand_str = rnn_details['brands'][0].replace('_', ' ').title()
+            desc_parts.append(f"({brand_str} brand)")
+        
+        # Category
+        if category:
+            desc_parts.append(f"({category.title()} category)")
+        
+        # Style from RNN
+        if rnn_details.get('styles') and rnn_details['styles'][0] != 'unknown':
+            style_str = rnn_details['styles'][0].replace('_', ' ').title()
+            desc_parts.append(f"in {style_str} style")
+        
+        # Condition from RNN
+        if rnn_details.get('condition') and rnn_details['condition'] != 'unknown':
+            condition_str = rnn_details['condition'].replace('_', ' ').title()
+            desc_parts.append(f"in {condition_str} condition")
+        
+        desc = " ".join(desc_parts)
+        desc += f", detected with {confidence*100:.0f}% confidence."
+        
+        # Add RNN confidence if available
+        if rnn_analysis.get('confidence', 0) > 0:
+            rnn_conf = rnn_analysis['confidence'] * 100
+            desc += f" RNN analysis confidence: {rnn_conf:.0f}%."
+        
+    else:
+        # Fallback to original description generation
+        desc_parts = []
+        if size:
+            desc_parts.append(size.title())
+        if color:
+            desc_parts.append(color.title())
+        desc_parts.append(cls)
+        if category:
+            desc_parts.append(f"({category.title()} category)")
+        desc = " ".join(desc_parts)
+        desc += f", detected with {confidence*100:.0f}% confidence."
+    
+    # Add crack and damage status
     if crack_status is not None:
         desc += f" Screen is {'cracked' if crack_status else 'not cracked'}."
     if damage_status is not None:
         desc += f" Item is {'damaged' if damage_status else 'not damaged'}."
     if location:
         desc += f" Location: {location}."
+    
     return desc
 
 def rgb_to_name(rgb):
@@ -298,45 +403,15 @@ def rgb_to_name(rgb):
             return "unknown"
 
 def extract_dominant_color(image_path, exclude_colors=None):
-    """Extract the two most dominant colors from the image using k-means clustering."""
-    try:
-        image = Image.open(image_path).convert('RGB')
-        image = image.resize((50, 50))  # Speed up and reduce noise
-        pixels = list(image.getdata())
-        if exclude_colors:
-            pixels = [c for c in pixels if c not in exclude_colors]
-        if not pixels:
-            return "Unknown"
-        # Use k-means clustering to find the two most dominant colors
-        arr = np.array(pixels)
-        kmeans = KMeans(n_clusters=2, n_init=5, random_state=42)
-        labels = kmeans.fit_predict(arr)
-        centers = kmeans.cluster_centers_.astype(int)
-        # Sort clusters by size
-        counts = np.bincount(labels)
-        sorted_indices = np.argsort(-counts)
-        color_names = []
-        for idx in sorted_indices:
-            rgb_tuple = tuple(centers[idx])
-            name = rgb_to_name(rgb_tuple)
-            if name != "Unknown" and name not in color_names:
-                color_names.append(name)
-            if len(color_names) >= 2:
-                break
-        if len(color_names) < 2:
-            default_colors = ['black', 'white', 'gray', 'silver']
-            for color in default_colors:
-                if color not in color_names:
-                    color_names.append(color)
-                if len(color_names) >= 2:
-                    break
-        return ", ".join(color_names[:2])
-    except Exception as e:
-        print(f"extract_dominant_color error: {e}")
-        return "black, white"
+    """Color analysis disabled for maximum speed."""
+    return "unknown"
 
 def extract_case_color(image_path, box, border_width=8):
-    """Extract the dominant color from the border of a bounding box (case area)."""
+    """Color analysis disabled for maximum speed."""
+    return "unknown"
+
+def _extract_case_color_fallback(image_path, box, border_width=8):
+    """Fallback case color extraction method."""
     try:
         image = Image.open(image_path).convert('RGB')
         x1, y1, x2, y2 = map(int, box)
@@ -374,7 +449,11 @@ def extract_case_color(image_path, box, border_width=8):
         return "black, white"
 
 def extract_tumbler_color(image_path, box):
-    """Extract the dominant color from the central area of the bounding box (main body of tumbler) using k-means clustering."""
+    """Color analysis disabled for maximum speed."""
+    return "unknown"
+
+def _extract_tumbler_color_fallback(image_path, box):
+    """Fallback tumbler color extraction method."""
     try:
         image = Image.open(image_path).convert('RGB')
         x1, y1, x2, y2 = map(int, box)
@@ -452,12 +531,13 @@ class Settings(db.Model):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+    email = db.Column(db.String(120), unique=True, nullable=True)  # Allow NULL for guest users
+    password_hash = db.Column(db.String(128), nullable=True)  # Allow NULL for guest users
     reset_token = db.Column(db.String(100), unique=True)
     reset_token_expiry = db.Column(db.DateTime)
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
+    is_guest = db.Column(db.Boolean, default=False)  # New field for guest users
     date_joined = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     items = db.relationship('Item', backref='owner', lazy=True)
@@ -470,11 +550,50 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         print(f"Checking password for user: {self.username}")  # Debug log
         print(f"Stored hash: {self.password_hash}")  # Debug log
+        if self.is_guest:
+            return False  # Guest users don't have passwords
         result = check_password_hash(self.password_hash, password)
         print(f"Password check result: {result}")  # Debug log
         return result
 
+    @staticmethod
+    def create_guest_user():
+        """Create a temporary guest user"""
+        try:
+            guest_username = f"guest_{uuid.uuid4().hex[:8]}"
+            print(f"Creating guest user with username: {guest_username}")  # Debug log
+            
+            # Check if username already exists (very unlikely but just in case)
+            existing_user = User.query.filter_by(username=guest_username).first()
+            if existing_user:
+                print(f"Username {guest_username} already exists, generating new one")  # Debug log
+                guest_username = f"guest_{uuid.uuid4().hex[:8]}"
+            
+            guest_user = User(
+                username=guest_username,
+                email=None,
+                password_hash=None,
+                is_guest=True,
+                is_active=True,
+                is_admin=False
+            )
+            print(f"Guest user object created: {guest_user}")  # Debug log
+            
+            db.session.add(guest_user)
+            print(f"Guest user added to session")  # Debug log
+            
+            db.session.commit()
+            print(f"Guest user committed to database")  # Debug log
+            
+            return guest_user
+        except Exception as e:
+            print(f"Error in create_guest_user: {e}")  # Debug log
+            db.session.rollback()  # Rollback on error
+            raise e
+
     def generate_reset_token(self):
+        if self.is_guest:
+            return None  # Guest users can't reset passwords
         token = serializer.dumps(self.email, salt=app.config['SECURITY_PASSWORD_SALT'])
         self.reset_token = token
         self.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
@@ -497,6 +616,7 @@ class Item(db.Model):
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(50), nullable=False)
+    brand = db.Column(db.String(100))  # Brand field for items
     status = db.Column(db.String(20), nullable=False)  # 'lost' or 'found'
     location = db.Column(db.String(100))
     date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -521,9 +641,15 @@ class Item(db.Model):
     weight = db.Column(db.String(50))  # Weight if known
     purchase_date = db.Column(db.Date)  # When it was purchased
     last_seen_location = db.Column(db.String(200))  # More specific location details
-    contact_preference = db.Column(db.String(50))  # How to contact about this item
-    reward_offered = db.Column(db.Float)  # Reward amount if any
-    additional_notes = db.Column(db.Text)  # Any other relevant information
+    additional_notes = db.Column(db.Text)  # Additional notes from user
+    
+    # Contact information fields
+    owner_contact = db.Column(db.String(20))  # Owner's contact number
+    finder_contact = db.Column(db.String(20))  # Finder's contact number
+    owner_email = db.Column(db.String(120))  # Owner's email address
+    finder_email = db.Column(db.String(120))  # Finder's email address
+    contact_preference = db.Column(db.String(50))  # Preferred contact method
+    best_time_to_contact = db.Column(db.String(50))  # Best time to contact
     
     # AI-generated analysis fields
     checkpoint_embedding = db.Column(db.Text)  # JSON string of checkpoint model embedding
@@ -582,6 +708,47 @@ class ModelMetrics(db.Model):
         db.session.add(metric)
         db.session.commit()
         return metric
+
+class MatchFeedback(db.Model):
+    """Model for tracking user feedback on potential matches."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lost_item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    found_item_id = db.Column(db.Integer, db.ForeignKey('item.id'), nullable=False)
+    feedback_type = db.Column(db.String(20), nullable=False)  # 'not_match', 'confirmed_match'
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='match_feedbacks')
+    lost_item = db.relationship('Item', foreign_keys=[lost_item_id], backref='lost_feedbacks')
+    found_item = db.relationship('Item', foreign_keys=[found_item_id], backref='found_feedbacks')
+    
+    @classmethod
+    def add_feedback(cls, user_id, lost_item_id, found_item_id, feedback_type):
+        """Add a new feedback record."""
+        # Check if feedback already exists
+        existing = cls.query.filter_by(
+            user_id=user_id,
+            lost_item_id=lost_item_id,
+            found_item_id=found_item_id
+        ).first()
+        
+        if existing:
+            # Update existing feedback
+            existing.feedback_type = feedback_type
+            existing.created_at = datetime.utcnow()
+            return existing
+        else:
+            # Create new feedback
+            feedback = cls(
+                user_id=user_id,
+                lost_item_id=lost_item_id,
+                found_item_id=found_item_id,
+                feedback_type=feedback_type
+            )
+            db.session.add(feedback)
+            db.session.commit()
+            return feedback
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -646,10 +813,31 @@ def login():
 
     return render_template('login.html')
 
+@app.route('/guest-login')
+def guest_login():
+    """Create and login a guest user"""
+    try:
+        print(f"Creating guest user...")  # Debug log
+        guest_user = User.create_guest_user()
+        print(f"Guest user created: {guest_user.username}, ID: {guest_user.id}")  # Debug log
+        login_user(guest_user, remember=True)
+        print(f"Guest user logged in successfully")  # Debug log
+        flash('Logged in as guest user. You can browse and search items, but some features may be limited.', 'info')
+        return redirect(url_for('index'))
+    except Exception as e:
+        print(f"Error creating guest user: {e}")  # Debug log
+        import traceback
+        traceback.print_exc()  # Print full traceback
+        flash(f'Failed to create guest account: {str(e)}', 'error')
+        return redirect(url_for('login'))
+
 @app.route('/logout')
 @login_required
 def logout():
+    user_was_guest = current_user.is_guest if current_user.is_authenticated else False
     logout_user()
+    if user_was_guest:
+        flash('Guest session ended. Thank you for using our service!', 'info')
     return redirect(url_for('index'))
 
 def enhanced_image_analysis(image_path):
@@ -738,10 +926,23 @@ def enhanced_image_analysis(image_path):
         except Exception as e:
             print(f"Error in checkpoint analysis: {e}")
         
-        # Extract additional information from image
-        color_info = extract_detailed_color_info(image_path)
+        # Extract additional information from image (color analysis disabled)
+        color_info = {'primary_color': 'unknown', 'secondary_color': ''}
         size_info = estimate_detailed_size(detected_objects, image_path)
         material_info = estimate_material(detected_objects, image_path)
+        
+        # RNN-based detailed analysis
+        rnn_analysis = None
+        try:
+            rnn_analysis = image_rnn_analyzer.analyze_image_details(image_path)
+            print(f"[RNN ANALYSIS] Detailed analysis completed for {image_path}")
+        except Exception as e:
+            print(f"[RNN ANALYSIS] Error in RNN analysis: {e}")
+            rnn_analysis = {
+                'details': {},
+                'caption': "RNN analysis unavailable",
+                'confidence': 0.0
+            }
         
         return {
             'detected_objects': detected_objects,
@@ -752,7 +953,8 @@ def enhanced_image_analysis(image_path):
             'suggested_tags': suggested_tags,
             'color_info': color_info,
             'size_info': size_info,
-            'material_info': material_info
+            'material_info': material_info,
+            'rnn_analysis': rnn_analysis
         }
         
     except Exception as e:
@@ -770,7 +972,36 @@ def enhanced_image_analysis(image_path):
         }
 
 def extract_detailed_color_info(image_path):
-    """Extract detailed color information from image."""
+    """Extract detailed color information from image using enhanced color detection."""
+    try:
+        from enhanced_color_detection import enhance_existing_color_detection
+        from advanced_color_detection import enhance_existing_color_detection_advanced
+        
+        # Use advanced color detection
+        color_analysis = enhance_existing_color_detection_advanced(image_path)
+        
+        if color_analysis.get('error'):
+            # Fallback to original method
+            return _extract_detailed_color_info_fallback(image_path)
+        
+        primary = color_analysis.get('primary_color')
+        secondary = color_analysis.get('secondary_color')
+        
+        return {
+            'primary_color': primary.get('name', 'unknown') if primary else 'unknown',
+            'primary_rgb': primary.get('rgb', [0, 0, 0]) if primary else [0, 0, 0],
+            'secondary_color': secondary.get('name', '') if secondary else '',
+            'secondary_rgb': secondary.get('rgb', None) if secondary else None,
+            'color_palette': [color.get('rgb', [0, 0, 0]) for color in color_analysis.get('dominant_colors', [])],
+            'enhanced_analysis': color_analysis  # Store full analysis for advanced features
+        }
+        
+    except Exception as e:
+        print(f"Enhanced color detection error, using fallback: {e}")
+        return _extract_detailed_color_info_fallback(image_path)
+
+def _extract_detailed_color_info_fallback(image_path):
+    """Fallback color extraction method."""
     try:
         image = Image.open(image_path)
         image_array = np.array(image)
@@ -923,35 +1154,125 @@ def process_image():
         image.save(temp_path)
         if not os.path.exists(temp_path):
             raise Exception("Image file was not saved successfully")
-            
-        # Use enhanced image analysis
-        analysis_result = enhanced_image_analysis(temp_path)
-        detected_objects = analysis_result['detected_objects']
         
-        # Log detected classes for debugging
-        print("Detected classes:", [obj.get('class', '').lower() for obj in detected_objects])
-        # Filter objects
+        # Check cache first for performance optimization
+        cached_result = get_cached_analysis(temp_path)
+        if cached_result:
+            print(f"[CACHE HIT] Using cached analysis for {temp_path}")
+            comprehensive_analysis = cached_result.get('comprehensive_analysis', {})
+            analysis_result = cached_result.get('analysis_result', {})
+        else:
+            # Choose processing mode based on configuration (default to ultra-fast mode for speed)
+            processing_mode = os.getenv('PROCESSING_MODE', 'ultra_fast').lower()
+            
+            if processing_mode == 'ultra_fast':
+                print(f"[ULTRA-FAST ANALYSIS] Starting ultra-fast analysis for {temp_path}")
+                comprehensive_analysis = enhanced_image_processor.process_image_ultra_fast(
+                    temp_path, object_detector
+                )
+            elif processing_mode == 'fast':
+                print(f"[FAST ANALYSIS] Starting fast analysis for {temp_path}")
+                comprehensive_analysis = enhanced_image_processor.process_image_fast(
+                    temp_path, object_detector
+                )
+            else:
+                # Use comprehensive R-CNN + RNN + BERT analysis with timeout
+                print(f"[COMPREHENSIVE ANALYSIS] Starting R-CNN + RNN + BERT analysis for {temp_path}")
+                try:
+                    # Set a timeout for the analysis (60 seconds)
+                    import threading
+                    result = [None]
+                    exception = [None]
+                    
+                    def run_analysis():
+                        try:
+                            result[0] = enhanced_image_processor.process_image_comprehensive(
+                                temp_path, object_detector, image_rnn_analyzer, text_analyzer
+                            )
+                        except Exception as e:
+                            exception[0] = e
+                    
+                    thread = threading.Thread(target=run_analysis)
+                    thread.daemon = True
+                    thread.start()
+                    thread.join(timeout=15)  # 15 second timeout for faster response
+                    
+                    if thread.is_alive():
+                        print("[TIMEOUT] Analysis taking too long, falling back to fast mode")
+                        comprehensive_analysis = enhanced_image_processor.process_image_fast(
+                            temp_path, object_detector
+                        )
+                    elif exception[0]:
+                        print(f"[ERROR] Analysis failed: {exception[0]}, falling back to fast mode")
+                        comprehensive_analysis = enhanced_image_processor.process_image_fast(
+                            temp_path, object_detector
+                        )
+                    else:
+                        comprehensive_analysis = result[0]
+                        
+                except Exception as e:
+                    print(f"[ERROR] Analysis error: {e}, falling back to fast mode")
+                    comprehensive_analysis = enhanced_image_processor.process_image_fast(
+                        temp_path, object_detector
+                    )
+        
+        # Extract results from comprehensive analysis
+        rcnn_analysis = comprehensive_analysis.get('rcnn_analysis', {})
+        rnn_analysis = comprehensive_analysis.get('rnn_analysis', {})
+        bert_analysis = comprehensive_analysis.get('bert_analysis', {})
+        fused_analysis = comprehensive_analysis.get('fused_analysis', {})
+        enhanced_description = comprehensive_analysis.get('enhanced_description', '')
+        
+        detected_objects = rcnn_analysis.get('objects', [])
+        print(f"[COMPREHENSIVE ANALYSIS] R-CNN: {len(detected_objects)} objects, RNN: {rnn_analysis.get('confidence', 0):.2f}, BERT: {bert_analysis.get('text_confidence', 0):.2f}")
+        
+        # Create analysis_result from comprehensive analysis (avoid duplicate processing)
+        if not cached_result:
+            # Extract data from comprehensive analysis to create compatible analysis_result
+            analysis_result = {
+                'detected_objects': rcnn_analysis.get('objects', []),
+                'checkpoint_embedding': None,  # Will be filled by checkpoint model if needed
+                'image_quality_score': 0.8,  # Default quality score
+                'confidence_score': rcnn_analysis.get('object_confidence', 0.0),
+                'suggested_category': 'other',
+                'suggested_tags': [],
+                'color_info': rnn_analysis.get('details', {}).get('colors', []),
+                'size_info': rnn_analysis.get('details', {}).get('size', 'unknown'),
+                'material_info': rnn_analysis.get('details', {}).get('materials', []),
+                'rnn_analysis': rnn_analysis,
+                'comprehensive_analysis': comprehensive_analysis
+            }
+            
+            # Cache the results for future use
+            cache_analysis_result(temp_path, {
+                'comprehensive_analysis': comprehensive_analysis,
+                'analysis_result': analysis_result
+            })
+            print(f"[CACHE] Cached analysis results for {temp_path}")
+        else:
+            # Use cached analysis_result
+            analysis_result = cached_result.get('analysis_result', {})
+        
+        # Log detected classes for debugging (only in debug mode)
+        if os.getenv('DEBUG_MODE', 'false').lower() == 'true':
+            print("Detected classes:", [obj.get('class', '').lower() for obj in detected_objects])
+        
+        # Filter objects (simplified for speed)
         filtered_objects = []
         image_area = None
-        try:
-            img = Image.open(temp_path)
-            image_area = img.width * img.height
-            img.close()  # Close the image file
-        except:
-            pass
+        # Skip image area calculation for speed unless needed
+        if len(detected_objects) > 0:
+            try:
+                img = Image.open(temp_path)
+                image_area = img.width * img.height
+                img.close()
+            except:
+                pass
+        # Simplified object filtering for speed
         for obj in detected_objects:
             obj_class = normalize_class_name(obj.get('class', ''))
-            # Size-based filter for phones: skip if bounding box is very small
-            if obj_class in ["phone", "mobile", "cell phone", "cellphone", "smartphone"] and 'box' in obj and image_area:
-                x1, y1, x2, y2 = map(int, obj['box'])
-                box_area = max(1, (x2 - x1) * (y2 - y1))
-                if box_area / image_area < 0.10:  # less than 10% of image area
-                    continue
-            # Filter out 'tv' and only allow classes in ALLOWED_CLASSES
-            if obj_class == 'tv':
-                continue
-            if obj_class in ALLOWED_CLASSES:
-                # Write back normalized name so downstream UI gets canonical labels
+            # Basic filtering only
+            if obj_class in ALLOWED_CLASSES and obj_class != 'tv':
                 obj['class'] = obj_class
                 filtered_objects.append(obj)
         # Process only the detected item with the highest confidence
@@ -960,21 +1281,24 @@ def process_image():
             obj = best_obj
             obj_class = normalize_class_name(obj.get('class', ''))
             box = obj.get('box')
-            # Heuristic: If class is 'tv' and bounding box is small, relabel as 'phone'
-            if obj_class == 'tv' and box:
-                try:
-                    img = Image.open(temp_path)
-                    img_w, img_h = img.size
-                    x1, y1, x2, y2 = map(int, box)
-                    box_w, box_h = x2 - x1, y2 - y1
-                    box_area = box_w * box_h
-                    img_area = img_w * img_h
-                    # If box is less than 30% of image area, likely a phone
-                    if box_area / img_area < 0.3:
-                        obj_class = 'phone'
-                        obj['class'] = 'phone'
-                except Exception as e:
-                    print(f"TV/phone heuristic error: {e}")
+            
+            # Skip complex heuristics in ultra-fast mode
+            if processing_mode != 'ultra_fast':
+                # Heuristic: If class is 'tv' and bounding box is small, relabel as 'phone'
+                if obj_class == 'tv' and box:
+                    try:
+                        img = Image.open(temp_path)
+                        img_w, img_h = img.size
+                        x1, y1, x2, y2 = map(int, box)
+                        box_w, box_h = x2 - x1, y2 - y1
+                        box_area = box_w * box_h
+                        img_area = img_w * img_h
+                        # If box is less than 30% of image area, likely a phone
+                        if box_area / img_area < 0.3:
+                            obj_class = 'phone'
+                            obj['class'] = 'phone'
+                    except Exception as e:
+                        print(f"TV/phone heuristic error: {e}")
             # Crop the image to the bounding box for this object
             cropped_path = None
             if box:
@@ -992,26 +1316,41 @@ def process_image():
                     cropped_path = temp_path  # fallback
             else:
                 cropped_path = temp_path
-            # Get color based on object type, always using cropped_path
-            color = None
-            if obj_class == 'tumbler' and box:
-                color = extract_tumbler_color(cropped_path, [0, 0, cropped.width, cropped.height])
-            elif obj_class in ["phone", "mobile", "cell phone", "cellphone", "smartphone", "tablet", "ipad"] and box:
-                color = extract_case_color(cropped_path, [0, 0, cropped.width, cropped.height])
+            # Simplified processing for ultra-fast mode
+            if processing_mode == 'ultra_fast':
+                # Skip expensive operations in ultra-fast mode
+                color = 'unknown'
+                size = 'unknown'
+                item_type = obj_class
+                category = 'other'
+                crack_status = None
+                damage_status = None
             else:
-                color = extract_dominant_color(cropped_path)
-            # Get size using only the cropped region
-            size = estimate_size([obj], cropped_path)
-            # Get item type and category
-            item_type, category = classify_item([obj])[0]
-            # Crack detection for phones
-            crack_status = None
-            if obj_class in ["phone", "mobile", "cell phone", "cellphone", "smartphone"]:
-                crack_status = is_screen_cracked(cropped_path, box)
-            # Damage detection for all items
-            damage_status = is_item_damaged(cropped_path, box)
-            # Generate improved description
-            description = generate_description([obj], color, size, category, None, crack_status, damage_status)
+                # Color analysis disabled for maximum speed
+                color = 'unknown'
+                # Get size using only the cropped region
+                size = estimate_size([obj], cropped_path)
+                # Get item type and category
+                item_type, category = classify_item([obj])[0]
+                # Crack detection for phones
+                crack_status = None
+                if obj_class in ["phone", "mobile", "cell phone", "cellphone", "smartphone"]:
+                    crack_status = is_screen_cracked(cropped_path, box)
+                # Damage detection for all items
+                damage_status = is_item_damaged(cropped_path, box)
+            # Generate enhanced description using comprehensive analysis
+            comprehensive_analysis = analysis_result.get('comprehensive_analysis', {})
+            enhanced_description = comprehensive_analysis.get('enhanced_description', '')
+            
+            if enhanced_description and enhanced_description != "Enhanced description generation failed":
+                # Use comprehensive analysis description
+                description = enhanced_description
+                print(f"[COMPREHENSIVE DESCRIPTION] Using enhanced description: {description[:100]}...")
+            else:
+                # Fallback to traditional RNN-enhanced description
+                rnn_analysis = analysis_result.get('rnn_analysis', {})
+                description = generate_description([obj], color, size, category, None, crack_status, damage_status, rnn_analysis)
+                print(f"[FALLBACK DESCRIPTION] Using traditional description: {description[:100]}...")
             items_info = [{
                 'item_type': item_type,
                 'description': description,
@@ -1029,8 +1368,9 @@ def process_image():
                     print(f"Cropped cleanup error: {cleanup_err}")
         else:
             items_info = []
-        # Add processed image to training dataset if objects were detected
-        if filtered_objects:
+        # Skip expensive training operations in ultra-fast mode or when disabled
+        enable_training = os.getenv('ENABLE_TRAINING', 'true').lower() in ['true', '1', 'yes']
+        if processing_mode != 'ultra_fast' and enable_training and filtered_objects:
             try:
                 # Create a temporary item-like object for training
                 temp_item = type('TempItem', (), {
@@ -1041,19 +1381,76 @@ def process_image():
                     'detected_objects': '[]'
                 })()
                 
-                # Log metrics for processed images
-                log_training_metrics(f"processed_{uuid.uuid4()}", filtered_objects, 'processed')
+                # Log metrics for processed images (async)
+                import threading
+                def log_metrics_async():
+                    try:
+                        log_training_metrics(f"processed_{uuid.uuid4()}", filtered_objects, 'processed')
+                        add_item_to_training_dataset(temp_item, filtered_objects)
+                        print(f"[TRAINING] Added processed image to training dataset")
+                    except Exception as e:
+                        print(f"[TRAINING] Error adding processed image to training: {e}")
                 
-                # Add to training dataset
-                add_item_to_training_dataset(temp_item, filtered_objects)
-                print(f"[TRAINING] Added processed image to training dataset")
+                # Run training operations in background
+                training_thread = threading.Thread(target=log_metrics_async)
+                training_thread.daemon = True
+                training_thread.start()
+                
             except Exception as e:
-                print(f"[TRAINING] Error adding processed image to training: {e}")
+                print(f"[TRAINING] Error setting up training: {e}")
+        
+        # Skip RNN tracking in ultra-fast mode
+        if processing_mode != 'ultra_fast' and current_user.is_authenticated and items_info:
+            try:
+                item_type = items_info[0].get('item_type', '')
+                rnn_manager.add_user_action(
+                    user_id=str(current_user.id),
+                    action='upload',
+                    item_type=item_type,
+                    timestamp=datetime.utcnow(),
+                    confidence=items_info[0].get('confidence', 1.0)
+                )
+                
+                # Add temporal data for pattern analysis
+                rnn_manager.temporal_data.append({
+                    'item_type': item_type,
+                    'timestamp': datetime.utcnow(),
+                    'location': 'upload',
+                    'user_id': str(current_user.id)
+                })
+            except Exception as e:
+                print(f"[RNN] Error tracking user behavior: {e}")
+        
+        # Prepare analysis summary (simplified for ultra-fast mode)
+        if processing_mode == 'ultra_fast':
+            analysis_summary = {
+                'rcnn_objects_detected': len(detected_objects),
+                'overall_confidence': comprehensive_analysis.get('processing_confidence', 0.0),
+                'processing_method': 'Ultra-Fast R-CNN',
+                'enhanced_features': {}
+            }
+        else:
+            analysis_summary = {
+                'rcnn_objects_detected': len(detected_objects),
+                'rnn_confidence': rnn_analysis.get('confidence', 0.0),
+                'bert_confidence': bert_analysis.get('text_confidence', 0.0),
+                'overall_confidence': comprehensive_analysis.get('processing_confidence', 0.0),
+                'processing_method': 'R-CNN + RNN + BERT',
+                'enhanced_features': {
+                    'colors': rnn_analysis.get('details', {}).get('colors', []),
+                    'materials': rnn_analysis.get('details', {}).get('materials', []),
+                    'condition': rnn_analysis.get('details', {}).get('condition', 'unknown'),
+                    'size': rnn_analysis.get('details', {}).get('size', 'unknown'),
+                    'brands': rnn_analysis.get('details', {}).get('brands', []),
+                    'styles': rnn_analysis.get('details', {}).get('styles', [])
+                }
+            }
         
         return jsonify({
             'items': items_info,
             'detected_objects': filtered_objects,
-            'description': items_info[0]['description'] if items_info else "No objects detected in the image."
+            'description': items_info[0]['description'] if items_info else "No objects detected in the image.",
+            'comprehensive_analysis': analysis_summary
         })
     except Exception as e:
         print(f"process_image error: {e}")
@@ -1064,14 +1461,13 @@ def process_image():
             'description': 'No objects detected in the image.'
         }), 200
     finally:
-        # Clean up the temporary file
+        # Clean up the temporary file (immediate cleanup for speed)
         if temp_path and os.path.exists(temp_path):
             try:
-                import time
-                time.sleep(0.1)
                 os.remove(temp_path)
             except Exception as cleanup_err:
                 print(f"Cleanup error: {cleanup_err}")
+                # Schedule cleanup for later if immediate removal fails
                 try:
                     import atexit
                     atexit.register(lambda: os.remove(temp_path) if os.path.exists(temp_path) else None)
@@ -1181,6 +1577,7 @@ def find_potential_matches(item):
 
 @app.route('/add_item', methods=['GET', 'POST'])
 @login_required
+@guest_restricted
 def add_item():
     if request.method == 'POST':
         title = request.form.get('title')
@@ -1202,9 +1599,22 @@ def add_item():
         weight = request.form.get('weight', '')
         purchase_date = request.form.get('purchase_date', '')
         last_seen_location = request.form.get('last_seen_location', '')
-        contact_preference = request.form.get('contact_preference', '')
-        reward_offered = request.form.get('reward_offered', '')
         additional_notes = request.form.get('additional_notes', '')
+        
+        # Contact information - context-aware based on status
+        if status == 'lost':
+            # For lost items, user is the owner
+            owner_contact = request.form.get('owner_contact', '')
+            owner_email = request.form.get('owner_email', '')
+            finder_contact = ''  # Not applicable for lost items
+            finder_email = ''    # Not applicable for lost items
+        else:
+            # For found items, user is the finder
+            finder_contact = request.form.get('finder_contact', '')
+            finder_email = request.form.get('finder_email', '')
+            owner_contact = ''   # Not applicable for found items
+            owner_email = ''     # Not applicable for found items
+        
         
         image = request.files.get('image')
         if not image:
@@ -1255,10 +1665,9 @@ def add_item():
                 if analysis_result['confidence_score'] > 0.7:
                     category = analysis_result['suggested_category']
 
-            # Extract color information from analysis
-            color_info = analysis_result.get('color_info', {})
-            color = color_info.get('primary_color', extract_dominant_color(image_path))
-            color_secondary = color_info.get('secondary_color', '') or color_secondary
+            # Color analysis disabled for maximum speed
+            color = 'unknown'
+            color_secondary = ''
 
             # Extract size information from analysis
             size_info = analysis_result.get('size_info', {})
@@ -1297,11 +1706,6 @@ def add_item():
                 estimated_value = float(estimated_value) if estimated_value else None
             except (ValueError, TypeError):
                 estimated_value = None
-                
-            try:
-                reward_offered = float(reward_offered) if reward_offered else None
-            except (ValueError, TypeError):
-                reward_offered = None
 
             # Convert purchase date
             purchase_date_obj = None
@@ -1338,9 +1742,13 @@ def add_item():
                 weight=weight,
                 purchase_date=purchase_date_obj,
                 last_seen_location=last_seen_location,
-                contact_preference=contact_preference,
-                reward_offered=reward_offered,
                 additional_notes=additional_notes,
+                
+                # Contact information
+                owner_contact=owner_contact,
+                finder_contact=finder_contact,
+                owner_email=owner_email,
+                finder_email=finder_email,
                 
                 # AI-generated analysis fields
                 checkpoint_embedding=checkpoint_embedding_json,
@@ -1386,6 +1794,20 @@ def add_item():
                     )
                     db.session.add(new_match)
                     created_matches += 1
+                    
+                    # Send email notification to the owner of the lost item
+                    try:
+                        lost_item = db.session.get(Item, lost_id)
+                        found_item = db.session.get(Item, found_id)
+                        if lost_item and found_item:
+                            email_service = get_email_service()
+                            if email_service:
+                                email_service.send_match_notification(
+                                    lost_item, found_item, match['score']
+                                )
+                                print(f"[EMAIL] Match notification sent for items {lost_id} <-> {found_id}")
+                    except Exception as e:
+                        print(f"[EMAIL] Failed to send match notification: {e}")
             db.session.commit()
 
             if created_matches > 0:
@@ -1406,7 +1828,10 @@ def add_item():
             except:
                 pass
             print(f"Error adding item: {str(e)}")
-            flash(f'Error processing image: {str(e)}')
+            print(f"Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            flash(f'Error adding item: {str(e)}')
             return redirect(url_for('add_item'))
 
     return render_template('add_item.html', 
@@ -1415,6 +1840,7 @@ def add_item():
 
 @app.route('/edit_item/<int:item_id>', methods=['GET', 'POST'])
 @login_required
+@guest_restricted
 def edit_item(item_id):
     """Edit an existing item with additional information fields."""
     item = Item.query.get_or_404(item_id)
@@ -1444,8 +1870,24 @@ def edit_item(item_id):
             item.size_dimensions = request.form.get('size_dimensions', item.size_dimensions)
             item.weight = request.form.get('weight', item.weight)
             item.last_seen_location = request.form.get('last_seen_location', item.last_seen_location)
-            item.contact_preference = request.form.get('contact_preference', item.contact_preference)
             item.additional_notes = request.form.get('additional_notes', item.additional_notes)
+            
+            # Update contact information - context-aware based on status
+            if item.status == 'lost':
+                # For lost items, user is the owner
+                item.owner_contact = request.form.get('owner_contact', item.owner_contact)
+                item.owner_email = request.form.get('owner_email', item.owner_email)
+                # Clear finder fields for lost items
+                item.finder_contact = ''
+                item.finder_email = ''
+            else:
+                # For found items, user is the finder
+                item.finder_contact = request.form.get('finder_contact', item.finder_contact)
+                item.finder_email = request.form.get('finder_email', item.finder_email)
+                # Clear owner fields for found items
+                item.owner_contact = ''
+                item.owner_email = ''
+            
             
             # Convert numeric fields
             try:
@@ -1454,11 +1896,6 @@ def edit_item(item_id):
             except (ValueError, TypeError):
                 item.estimated_value = None
                 
-            try:
-                reward_offered = request.form.get('reward_offered', '')
-                item.reward_offered = float(reward_offered) if reward_offered else None
-            except (ValueError, TypeError):
-                item.reward_offered = None
 
             # Convert purchase date
             purchase_date = request.form.get('purchase_date', '')
@@ -1501,28 +1938,28 @@ def edit_item(item_id):
                     # Update color and size if not manually set
                     if not request.form.get('color_override'):
                         color_info = analysis_result.get('color_info', {})
-                        item.color = color_info.get('primary_color', item.color)
-                        if not item.color_secondary:
-                            item.color_secondary = color_info.get('secondary_color', '')
-                    
-                    if not request.form.get('size_override'):
-                        size_info = analysis_result.get('size_info', {})
-                        item.size = size_info.get('size_category', item.size)
-                        if not item.size_dimensions and 'estimated_dimensions' in size_info:
-                            item.size_dimensions = size_info['estimated_dimensions']
-                    
-                    if not item.material:
-                        material_info = analysis_result.get('material_info', {})
-                        item.material = material_info.get('material', item.material)
-                    
-                    # Update text embedding
-                    text_embedding = text_analyzer.analyze_text(f"{item.title} {item.description}")
-                    item.text_embedding = json.dumps(text_embedding.tolist())
-                    
-                    # Update image hash
-                    with open(new_image_path, 'rb') as f:
-                        image_bytes = f.read()
-                        item.image_hash = hashlib.md5(image_bytes).hexdigest()
+                    item.color = color_info.get('primary_color', item.color)
+                    if not item.color_secondary:
+                        item.color_secondary = color_info.get('secondary_color', '')
+                
+                if not request.form.get('size_override'):
+                    size_info = analysis_result.get('size_info', {})
+                    item.size = size_info.get('size_category', item.size)
+                    if not item.size_dimensions and 'estimated_dimensions' in size_info:
+                        item.size_dimensions = size_info['estimated_dimensions']
+                
+                if not item.material:
+                    material_info = analysis_result.get('material_info', {})
+                    item.material = material_info.get('material', item.material)
+                
+                # Update text embedding
+                text_embedding = text_analyzer.analyze_text(f"{item.title} {item.description}")
+                item.text_embedding = json.dumps(text_embedding.tolist())
+                
+                # Update image hash
+                with open(new_image_path, 'rb') as f:
+                    image_bytes = f.read()
+                item.image_hash = hashlib.md5(image_bytes).hexdigest()
             
             db.session.commit()
             flash('Item updated successfully!', 'success')
@@ -1552,7 +1989,6 @@ def edit_item(item_id):
         'purchase_date': item.purchase_date.strftime('%Y-%m-%d') if item.purchase_date else '',
         'last_seen_location': item.last_seen_location or '',
         'contact_preference': item.contact_preference or '',
-        'reward_offered': item.reward_offered or '',
         'additional_notes': item.additional_notes or ''
     }
     
@@ -1564,17 +2000,85 @@ def view_item(item_id):
     detected_objects = json.loads(item.detected_objects) if item.detected_objects else None
     return render_template('view_item.html', item=item, detected_objects=detected_objects)
 
+@app.route('/item/<int:item_id>/modify-description', methods=['GET', 'POST'])
+@login_required
+def modify_description(item_id):
+    """Modify item description."""
+    item = Item.query.get_or_404(item_id)
+    
+    # Check if user owns the item or is admin
+    if item.user_id != current_user.id and not current_user.is_admin:
+        flash('You can only modify descriptions of your own items.', 'error')
+        return redirect(url_for('view_item', item_id=item_id))
+    
+    if request.method == 'POST':
+        try:
+            # Get the new description
+            new_description = request.form.get('description', '').strip()
+            
+            if not new_description:
+                flash('Description cannot be empty.', 'error')
+                return redirect(url_for('modify_description', item_id=item_id))
+            
+            # Update the description
+            old_description = item.description
+            item.description = new_description
+            
+            # Update text embedding with new description
+            try:
+                text_embedding = text_analyzer.analyze_text(f"{item.title} {item.description}")
+                item.text_embedding = json.dumps(text_embedding.tolist())
+            except Exception as e:
+                print(f"Error updating text embedding: {e}")
+            
+            # Save changes
+            db.session.commit()
+            
+            flash('Description updated successfully!', 'success')
+            return redirect(url_for('view_item', item_id=item_id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating description: {str(e)}', 'error')
+            return redirect(url_for('modify_description', item_id=item_id))
+    
+    # Get original AI-generated description if available
+    original_description = None
+    if hasattr(item, 'ai_generated_description') and item.ai_generated_description:
+        original_description = item.ai_generated_description
+    elif item.description and len(item.description) > 50:  # Assume longer descriptions are AI-generated
+        original_description = item.description
+    
+    return render_template('modify_description.html', item=item, original_description=original_description)
+
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
     category = request.args.get('category', '')
     status = request.args.get('status', '')
     
+    # Track user behavior for RNN analysis
+    if current_user.is_authenticated:
+        rnn_manager.add_user_action(
+            user_id=str(current_user.id),
+            action='search',
+            item_type=category,
+            timestamp=datetime.utcnow()
+        )
+        
+        # Get RNN predictions for user intent
+        user_intent = rnn_manager.predict_user_intent(str(current_user.id))
+    else:
+        user_intent = {"prediction": "unknown", "confidence": 0.0, "suggestions": []}
+    
     items = Item.query
     
     if query:
         # Get query embedding
         query_embedding = text_analyzer.analyze_text(query)
+        
+        # Analyze description with RNN
+        description_analysis = rnn_manager.analyze_description_sequence(query)
         
         # Get all items and compute similarity
         all_items = Item.query.all()
@@ -1583,7 +2087,12 @@ def search():
         for item in all_items:
             item_embedding = json.loads(item.text_embedding)
             similarity = text_analyzer.compute_similarity(query, f"{item.title} {item.description}")
-            similarities.append((item, similarity))
+            
+            # Enhance similarity with RNN analysis
+            rnn_similarity = description_analysis.get('similarity_score', 0.0)
+            enhanced_similarity = (similarity + rnn_similarity) / 2.0
+            
+            similarities.append((item, enhanced_similarity))
         
         # Sort by similarity
         similarities.sort(key=lambda x: x[1], reverse=True)
@@ -1595,69 +2104,103 @@ def search():
             items = items.filter_by(status=status)
         items = items.order_by(Item.date.desc()).all()
     
-    return render_template('search.html', items=items, query=query, category=category, status=status)
+    # Get temporal pattern predictions
+    temporal_prediction = rnn_manager.predict_temporal_patterns(category)
+    
+    return render_template('search.html', items=items, query=query, category=category, status=status,
+                         user_intent=user_intent, temporal_prediction=temporal_prediction)
 
 @app.route('/similar_items/<int:item_id>')
 def similar_items(item_id):
-        item = Item.query.get_or_404(item_id)
+    item = Item.query.get_or_404(item_id)
 
     # Strategy: prioritize identical image hash, else rank by appearance (color/size/category)
-        all_items = Item.query.filter(Item.id != item_id).all()
+    all_items = Item.query.filter(Item.id != item_id).all()
+    
+    # Get user feedback on matches if user is authenticated
+    user_feedback = {}
+    if current_user.is_authenticated:
+        feedback_records = MatchFeedback.query.filter_by(user_id=current_user.id).all()
+        for feedback in feedback_records:
+            key = f"{feedback.lost_item_id}_{feedback.found_item_id}"
+            user_feedback[key] = feedback.feedback_type
 
-        def color_tokens(value: str):
-            if not value:
-                return set()
-            return set(c.strip().lower() for c in value.split(','))
+    def color_tokens(value: str):
+        if not value:
+            return set()
+        return set(c.strip().lower() for c in value.split(','))
 
-        candidate_scores = []
-        for other_item in all_items:
-            # Identical hash with same category is best possible
-            if getattr(item, 'image_hash', None) and getattr(other_item, 'image_hash', None):
-                if item.image_hash == other_item.image_hash and item.category == other_item.category:
-                    candidate_scores.append((other_item, 1.0))
-                    continue
+    candidate_scores = []
+    for other_item in all_items:
+        # Check if user has marked this as "not_match"
+        if current_user.is_authenticated:
+            feedback_key = f"{item.id}_{other_item.id}"
+            reverse_key = f"{other_item.id}_{item.id}"
+            if user_feedback.get(feedback_key) == 'not_match' or user_feedback.get(reverse_key) == 'not_match':
+                continue  # Skip items marked as not a match
+        
+        # Identical hash with same category is best possible
+        if getattr(item, 'image_hash', None) and getattr(other_item, 'image_hash', None):
+            if item.image_hash == other_item.image_hash and item.category == other_item.category:
+                candidate_scores.append((other_item, 1.0))
+                continue
 
-            score = 0.0
-            # Category alignment
-            if item.category == other_item.category:
-                score += 0.30
+        score = 0.0
+        # Category alignment
+        if item.category == other_item.category:
+            score += 0.30
 
-            # Color overlap
-            item_colors = color_tokens(item.color)
-            other_colors = color_tokens(other_item.color)
-            if item_colors and other_colors:
-                intersection = len(item_colors.intersection(other_colors))
-                union = len(item_colors.union(other_colors)) or 1
-                color_similarity = intersection / union
-                score += 0.50 * color_similarity
+        # Color overlap
+        item_colors = color_tokens(item.color)
+        other_colors = color_tokens(other_item.color)
+        if item_colors and other_colors:
+            intersection = len(item_colors.intersection(other_colors))
+            union = len(item_colors.union(other_colors)) or 1
+            color_similarity = intersection / union
+            score += 0.50 * color_similarity
 
-            # Size match gives small boost
-            if item.size and other_item.size and item.size == other_item.size:
-                score += 0.10
+        # Size match gives small boost
+        if item.size and other_item.size and item.size == other_item.size:
+            score += 0.10
 
-            # Very small text assist to break ties only
-            try:
-                text_sim = text_analyzer.compute_similarity(
-                    f"{item.title} {item.description}",
-                    f"{other_item.title} {other_item.description}"
-                )
-            except Exception:
-                text_sim = 0.0
-            score += 0.10 * text_sim
+        # Very small text assist to break ties only
+        try:
+            text_sim = text_analyzer.compute_similarity(
+                f"{item.title} {item.description}",
+                f"{other_item.title} {other_item.description}"
+            )
+        except Exception:
+            text_sim = 0.0
+        score += 0.10 * text_sim
 
-            if score > 1.0:
-                score = 1.0
+        if score > 1.0:
+            score = 1.0
 
-            candidate_scores.append((other_item, score))
+        candidate_scores.append((other_item, score))
 
-        # Pick only the single best candidate
-        best_item = None
-        if candidate_scores:
-            candidate_scores.sort(key=lambda x: x[1], reverse=True)
-            best_item, _ = candidate_scores[0]
+    # Pick only the single best candidate
+    best_item = None
+    if candidate_scores:
+        candidate_scores.sort(key=lambda x: x[1], reverse=True)
+        best_item, _ = candidate_scores[0]
 
-        similar_items = [best_item] if best_item else []
-        return render_template('similar_items.html', item=item, similar_items=similar_items)
+    # Prepare similar items with match status
+    similar_items = []
+    if best_item:
+        # Check if this is a confirmed match
+        is_confirmed_match = False
+        if current_user.is_authenticated:
+            feedback_key = f"{item.id}_{best_item.id}"
+            reverse_key = f"{best_item.id}_{item.id}"
+            is_confirmed_match = (user_feedback.get(feedback_key) == 'confirmed_match' or 
+                                user_feedback.get(reverse_key) == 'confirmed_match')
+        
+        similar_items.append({
+            'item': best_item,
+            'is_confirmed_match': is_confirmed_match
+        })
+
+    return render_template('similar_items.html', item=item, similar_items=similar_items)
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
@@ -1711,7 +2254,7 @@ def view_matches(item_id):
     # Get full item objects for matches
     match_items = []
     for match in matches:
-        match_item = Item.query.get(match['id'])
+        match_item = db.session.get(Item, match['id'])
         if match_item:
             match['item'] = match_item
             match_items.append(match)
@@ -1727,6 +2270,26 @@ def admin_users():
     
     users = User.query.order_by(User.date_joined.desc()).all()
     return render_template('admin_users.html', users=users)
+
+@app.route('/my-items')
+@login_required
+def my_items():
+    """User's own listed items"""
+    status = request.args.get('status', 'all')
+    items = Item.query.filter_by(user_id=current_user.id)
+
+    if status == 'lost' or status == 'found':
+        items = items.filter_by(status=status)
+    elif status == 'matched':
+        # Get IDs of items that are part of a confirmed match
+        matched_lost_ids = db.session.query(Match.lost_item_id).filter_by(status='confirmed')
+        matched_found_ids = db.session.query(Match.found_item_id).filter_by(status='confirmed')
+        items = items.filter(
+            (Item.id.in_(matched_lost_ids)) | (Item.id.in_(matched_found_ids))
+        )
+
+    items = items.order_by(Item.date.desc()).all()
+    return render_template('my_items.html', items=items, status=status)
 
 @app.route('/admin/items')
 @login_required
@@ -1810,54 +2373,374 @@ def admin_dashboard():
 def admin_add_user():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
-        
-    username = request.form.get('username')
-    email = request.form.get('email')
-    password = request.form.get('password')
-    is_admin = request.form.get('is_admin') == 'on'
+    
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    is_admin = data.get('is_admin', False)
+    
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'Username and password are required'}), 400
     
     if User.query.filter_by(username=username).first():
-        flash('Username already exists')
-        return redirect(url_for('admin_dashboard'))
+        return jsonify({'success': False, 'message': 'Username already exists'}), 400
         
-    if User.query.filter_by(email=email).first():
-        flash('Email already registered')
-        return redirect(url_for('admin_dashboard'))
-        
-    user = User(username=username, email=email, is_admin=is_admin)
-    user.set_password(password)
-    db.session.add(user)
-    db.session.commit()
+    if email and User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'message': 'Email already registered'}), 400
     
-    flash('User added successfully')
-    return redirect(url_for('admin_dashboard'))
+    try:
+        user = User(username=username, email=email, is_admin=is_admin)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'User added successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 400
 
-@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@app.route('/admin/users/<int:user_id>')
+@login_required
+def admin_get_user(user_id):
+    """Get user details for viewing/editing"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    return jsonify({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'is_admin': user.is_admin,
+        'is_guest': user.is_guest,
+        'is_active': user.is_active,
+        'date_joined': user.date_joined.strftime('%Y-%m-%d') if user.date_joined else None,
+        'last_login': user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else None
+    })
+
+@app.route('/admin/users/<int:user_id>', methods=['PUT'])
+@login_required
+def admin_update_user(user_id):
+    """Update user information"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    
+    try:
+        # Update username
+        if 'username' in data and data['username']:
+            user.username = data['username']
+        
+        # Update email
+        if 'email' in data:
+            user.email = data['email'] if data['email'] else None
+        
+        # Update password if provided
+        if 'password' in data and data['password']:
+            user.password_hash = generate_password_hash(data['password'])
+        
+        # Update admin status
+        if 'is_admin' in data:
+            user.is_admin = data['is_admin']
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'User updated successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/admin/users/<int:user_id>/toggle-status', methods=['POST'])
+@login_required
+def admin_toggle_user_status(user_id):
+    """Toggle user active/inactive status"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    
+    try:
+        user.is_active = data.get('activate', True)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'User {"activated" if user.is_active else "deactivated"} successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['DELETE'])
 @login_required
 def admin_delete_user(user_id):
+    """Delete user"""
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
         
     user = User.query.get_or_404(user_id)
     if user.id == current_user.id:
-        return jsonify({'error': 'Cannot delete yourself'}), 400
-        
-    db.session.delete(user)
-    db.session.commit()
+        return jsonify({'success': False, 'message': 'Cannot delete yourself'}), 400
     
-    return jsonify({'message': 'User deleted successfully'})
+    if user.is_admin:
+        return jsonify({'success': False, 'message': 'Cannot delete admin users'}), 400
+        
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'User deleted successfully'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/admin/items/<int:item_id>/edit-data', methods=['GET'])
+@login_required
+def admin_get_item_data(item_id):
+    """Get item data for admin editing"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        item = Item.query.get_or_404(item_id)
+        
+        # Prepare item data for editing
+        item_data = {
+            'id': item.id,
+            'title': item.title,
+            'category': item.category,
+            'status': item.status,
+            'location': item.location or '',
+            'description': item.description,
+            'brand': item.brand or '',
+            'model': item.model or '',
+            'color': item.color or '',
+            'size': item.size or '',
+            'additional_notes': item.additional_notes or '',
+            'owner_username': item.owner.username,
+            'date': item.date.strftime('%Y-%m-%d %H:%M')
+        }
+        
+        return jsonify({
+            'success': True,
+            'item': item_data
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get item data {item_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load item data.'
+        }), 500
+
+@app.route('/admin/items/<int:item_id>/update', methods=['POST'])
+@login_required
+def admin_update_item(item_id):
+    """Update item data from admin panel"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        item = Item.query.get_or_404(item_id)
+        
+        # Update basic fields
+        item.title = request.form.get('title', item.title)
+        item.category = request.form.get('category', item.category)
+        item.status = request.form.get('status', item.status)
+        item.location = request.form.get('location', item.location)
+        item.description = request.form.get('description', item.description)
+        
+        # Update additional fields
+        item.brand = request.form.get('brand', item.brand)
+        item.model = request.form.get('model', item.model)
+        item.color = request.form.get('color', item.color)
+        item.size = request.form.get('size', item.size)
+        item.additional_notes = request.form.get('additional_notes', item.additional_notes)
+        
+        # Log the update for audit purposes
+        print(f"[ADMIN] User {current_user.username} updated item {item_id}: {item.title}")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Item "{item.title}" updated successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to update item {item_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update item. Please try again.'
+        }), 500
 
 @app.route('/admin/items/<int:item_id>/delete', methods=['POST'])
 @login_required
 def admin_delete_item(item_id):
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
-        
-    item = Item.query.get_or_404(item_id)
-    db.session.delete(item)
-    db.session.commit()
     
-    return jsonify({'message': 'Item deleted successfully'})
+    try:
+        item = Item.query.get_or_404(item_id)
+        
+        # Log the deletion for audit purposes
+        print(f"[ADMIN] User {current_user.username} deleted item {item_id}: {item.title}")
+        
+        # Delete associated matches first
+        Match.query.filter(
+            (Match.lost_item_id == item_id) | (Match.found_item_id == item_id)
+        ).delete()
+        
+        # Delete the item
+        db.session.delete(item)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Item "{item.title}" deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to delete item {item_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete item. Please try again.'
+        }), 500
+
+@app.route('/api/mark-match', methods=['POST'])
+@login_required
+def mark_match():
+    """Mark two items as a confirmed match"""
+    try:
+        data = request.get_json()
+        lost_item_id = data.get('lost_item_id')
+        found_item_id = data.get('found_item_id')
+        status = data.get('status', 'confirmed')
+        
+        if not lost_item_id or not found_item_id:
+            return jsonify({'success': False, 'error': 'Missing item IDs'}), 400
+        
+        # Get the items
+        lost_item = db.session.get(Item, lost_item_id)
+        found_item = db.session.get(Item, found_item_id)
+        
+        if not lost_item or not found_item:
+            return jsonify({'success': False, 'error': 'Items not found'}), 404
+        
+        # Check if user owns one of the items
+        if lost_item.user_id != current_user.id and found_item.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'You can only mark matches for your own items'}), 403
+        
+        # Check if match already exists
+        existing_match = Match.query.filter(
+            ((Match.lost_item_id == lost_item_id) & (Match.found_item_id == found_item_id)) |
+            ((Match.lost_item_id == found_item_id) & (Match.found_item_id == lost_item_id))
+        ).first()
+        
+        if existing_match:
+            return jsonify({'success': False, 'error': 'Match already exists'}), 400
+        
+        # Create new match
+        match = Match(
+            lost_item_id=lost_item_id,
+            found_item_id=found_item_id,
+            status=status,
+            created_by=current_user.id
+        )
+        db.session.add(match)
+        
+        # Record positive feedback
+        MatchFeedback.add_feedback(
+            user_id=current_user.id,
+            lost_item_id=lost_item_id,
+            found_item_id=found_item_id,
+            feedback_type='confirmed_match'
+        )
+        
+        # Send email notifications to both owners
+        try:
+            email_service = EmailService()
+            
+            # Email to lost item owner
+            if lost_item.user_id != current_user.id:
+                email_service.send_match_notification(
+                    lost_item.owner.email,
+                    lost_item.owner.username,
+                    lost_item.title,
+                    found_item.title,
+                    found_item.owner.username,
+                    found_item.image_path
+                )
+            
+            # Email to found item owner
+            if found_item.user_id != current_user.id:
+                email_service.send_match_notification(
+                    found_item.owner.email,
+                    found_item.owner.username,
+                    found_item.title,
+                    lost_item.title,
+                    lost_item.owner.username,
+                    lost_item.image_path
+                )
+        except Exception as e:
+            print(f"[ERROR] Failed to send match notifications: {e}")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Match confirmed and notifications sent'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to mark match: {e}")
+        return jsonify({'success': False, 'error': 'Failed to mark match'}), 500
+
+@app.route('/api/not-match', methods=['POST'])
+@login_required
+def not_match():
+    """Record that two items are not a match"""
+    try:
+        data = request.get_json()
+        lost_item_id = data.get('lost_item_id')
+        found_item_id = data.get('found_item_id')
+        
+        if not lost_item_id or not found_item_id:
+            return jsonify({'success': False, 'error': 'Missing item IDs'}), 400
+        
+        # Get the items
+        lost_item = db.session.get(Item, lost_item_id)
+        found_item = db.session.get(Item, found_item_id)
+        
+        if not lost_item or not found_item:
+            return jsonify({'success': False, 'error': 'Items not found'}), 404
+        
+        # Check if user owns one of the items
+        if lost_item.user_id != current_user.id and found_item.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'You can only provide feedback for your own items'}), 403
+        
+        # Record negative feedback
+        MatchFeedback.add_feedback(
+            user_id=current_user.id,
+            lost_item_id=lost_item_id,
+            found_item_id=found_item_id,
+            feedback_type='not_match'
+        )
+        print(f"[FEEDBACK] User {current_user.username} marked items {lost_item_id} and {found_item_id} as not a match")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Feedback recorded'
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to record not-match feedback: {e}")
+        return jsonify({'success': False, 'error': 'Failed to record feedback'}), 500
 
 @app.route('/admin/export', methods=['POST'])
 @login_required
@@ -2244,6 +3127,19 @@ def retroactive_match_all():
                 )
                 db.session.add(new_match)
                 count += 1
+                
+                # Send email notification to the owner of the lost item
+                try:
+                    found_item = db.session.get(Item, found_id)
+                    if found_item:
+                        email_service = get_email_service()
+                        if email_service:
+                            email_service.send_match_notification(
+                                lost_item, found_item, match['score']
+                            )
+                            print(f"[EMAIL] Retroactive match notification sent for items {lost_item.id} <-> {found_id}")
+                except Exception as e:
+                    print(f"[EMAIL] Failed to send retroactive match notification: {e}")
     db.session.commit()
     print(f"[DEBUG] Retroactive matching complete. {count} new matches created.")
 
@@ -2519,6 +3415,52 @@ def admin_training():
                          recent_training=recent_training,
                          object_metrics=object_metrics,
                          text_metrics=text_metrics)
+
+@app.route('/admin/rnn_analytics')
+@login_required
+def admin_rnn_analytics():
+    """RNN Analytics Dashboard"""
+    if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('index'))
+    
+    # Get user behavior statistics
+    user_stats = {}
+    for user_id, actions in rnn_manager.user_sequences.items():
+        if actions:
+            user_stats[user_id] = {
+                'total_actions': len(actions),
+                'last_action': actions[-1][2].strftime('%Y-%m-%d %H:%M:%S'),
+                'action_types': list(set([a[0] for a in actions])),
+                'item_types': list(set([a[1] for a in actions if a[1]]))
+            }
+    
+    # Get temporal pattern statistics
+    temporal_stats = {
+        'total_items': len(rnn_manager.temporal_data),
+        'by_type': {},
+        'by_hour': {},
+        'by_day': {}
+    }
+    
+    for data in rnn_manager.temporal_data:
+        item_type = data.get('item_type', 'unknown')
+        timestamp = data.get('timestamp', datetime.utcnow())
+        
+        # Count by type
+        temporal_stats['by_type'][item_type] = temporal_stats['by_type'].get(item_type, 0) + 1
+        
+        # Count by hour
+        hour = timestamp.hour
+        temporal_stats['by_hour'][hour] = temporal_stats['by_hour'].get(hour, 0) + 1
+        
+        # Count by day of week
+        day = timestamp.weekday()
+        temporal_stats['by_day'][day] = temporal_stats['by_day'].get(day, 0) + 1
+    
+    return render_template('admin_rnn_analytics.html', 
+                         user_stats=user_stats, 
+                         temporal_stats=temporal_stats)
 
 @app.route('/admin/training/retrain', methods=['POST'])
 @login_required
@@ -2796,6 +3738,60 @@ def _compute_map(ground_truth, predictions):
         'recall_at_10': sum(recall_at_10) / (len(recall_at_10) or 1),
         'num_queries': len(ap_values)
     }
+
+@app.route('/admin/training/evaluate_coco', methods=['POST'])
+@login_required
+def admin_evaluate_coco():
+    """Run COCO evaluation using best_model1.pth."""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        import subprocess
+        import os
+        
+        # Run COCO evaluation script
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'evaluate_coco_detection.py')
+        result = subprocess.run([
+            sys.executable, script_path, 
+            '--dataset', 'image recog.v1i.coco-mmdetection',
+            '--split', 'test',
+            '--limit', '50'  # Limit to 50 images for quick test
+        ], capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)))
+        
+        if result.returncode == 0:
+            # Find the generated results file
+            import glob
+            result_files = glob.glob('coco_eval_test_*.json')
+            if result_files:
+                latest_file = max(result_files, key=os.path.getctime)
+                with open(latest_file, 'r') as f:
+                    results = json.load(f)
+                
+                # Store metrics in database
+                metrics = results.get('metrics', {})
+                ModelMetrics.add_metric('coco_eval', 'map', metrics.get('map', 0.0))
+                ModelMetrics.add_metric('coco_eval', 'ap50', metrics.get('ap50', 0.0))
+                ModelMetrics.add_metric('coco_eval', 'ap75', metrics.get('ap75', 0.0))
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'COCO evaluation completed successfully',
+                    'results_file': latest_file,
+                    'metrics': metrics,
+                    'output': result.stdout
+                })
+            else:
+                return jsonify({'error': 'COCO evaluation completed but no results file found'}), 500
+        else:
+            return jsonify({
+                'error': 'COCO evaluation failed',
+                'stderr': result.stderr,
+                'stdout': result.stdout
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'error': f'Error running COCO evaluation: {str(e)}'}), 500
 
 @app.route('/admin/training/evaluate_checkpoint', methods=['POST'])
 @login_required

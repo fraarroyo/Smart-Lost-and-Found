@@ -141,6 +141,8 @@ def main():
     parser = argparse.ArgumentParser(description="Fine-tune detector on previous dataset")
     parser.add_argument('--dataset', type=str, default="image recog.v1i.coco-mmdetection", help='Root folder containing train/test/valid with COCO jsons')
     parser.add_argument('--split', type=str, default='train', choices=['train', 'valid', 'test'], help='Dataset split to use for training')
+    parser.add_argument('--coco-images', type=str, default=None, help='Optional: path to COCO images directory (e.g., train2017)')
+    parser.add_argument('--coco-ann', type=str, default=None, help='Optional: path to COCO annotation json (e.g., annotations/instances_train2017.json)')
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--batch-size', type=int, default=2)
     parser.add_argument('--lr', type=float, default=5e-4)
@@ -150,11 +152,17 @@ def main():
 
     # Resolve paths
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    dataset_root = os.path.join(base_dir, args.dataset)
-    img_dir = os.path.join(dataset_root, args.split)
-    ann_file = os.path.join(dataset_root, args.split, '_annotations.coco.json')
-    if not os.path.exists(ann_file):
-        raise FileNotFoundError(f"Annotation file not found: {ann_file}")
+    if args.coco_images and args.coco_ann:
+        img_dir = os.path.abspath(os.path.expanduser(args.coco_images))
+        ann_file = os.path.abspath(os.path.expanduser(args.coco_ann))
+        if not (os.path.isdir(img_dir) and os.path.isfile(ann_file)):
+            raise FileNotFoundError(f"Invalid COCO paths. images={img_dir}, ann={ann_file}")
+    else:
+        dataset_root = os.path.join(base_dir, args.dataset)
+        img_dir = os.path.join(dataset_root, args.split)
+        ann_file = os.path.join(dataset_root, args.split, '_annotations.coco.json')
+        if not os.path.exists(ann_file):
+            raise FileNotFoundError(f"Annotation file not found: {ann_file}")
 
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
