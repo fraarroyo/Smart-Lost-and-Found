@@ -1,0 +1,22 @@
+# Minimal requirements for PythonAnywhere
+# Install these first to avoid conflicts
+
+# Core Flask dependencies
+Flask==2.3.3
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.2
+Flask-Migrate==4.0.5
+Flask-Mail==0.9.1
+Werkzeug==2.3.7
+
+# Basic image processing
+Pillow==10.4.0
+
+# Essential utilities
+python-dotenv==1.0.0
+itsdangerous==2.1.2
+webcolors==1.13
+gunicorn==21.2.0
+
+# Install numpy separately to avoid conflicts
+numpy>=1.22.4,<1.29.0
