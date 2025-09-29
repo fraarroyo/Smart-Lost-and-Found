@@ -46,7 +46,13 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 
 # Update database URI to use SQLite
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///lostfound.db'
+# For PythonAnywhere, use absolute path to avoid permission issues
+if os.environ.get('PYTHONANYWHERE_DOMAIN'):
+    # Running on PythonAnywhere
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////home/fraarroyo/mysite/lostfound.db'
+else:
+    # Running locally
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///lostfound.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Fix uploads directory path
@@ -87,6 +93,12 @@ os.environ.pop('USE_WEB_DETECTOR', None)
 # Set ultra_fast processing mode for maximum speed
 os.environ['PROCESSING_MODE'] = 'ultra_fast'
 os.environ['ENABLE_TRAINING'] = 'false'  # Disable training for speed
+
+# PythonAnywhere optimizations
+if os.environ.get('PYTHONANYWHERE_DOMAIN'):
+    # Additional optimizations for PythonAnywhere
+    os.environ['RENDER'] = 'true'  # Skip heavy startup evaluation
+    os.environ['PYTHONANYWHERE_OPTIMIZED'] = 'true'
 
 # Initialize unified ML model
 try:
