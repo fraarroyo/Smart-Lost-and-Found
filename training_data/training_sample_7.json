@@ -1,0 +1,37 @@
+{
+  "item_id": 7,
+  "image_path": "uploads/8c1a2aaf-58af-4cf5-ab69-118478c1ecf0.jpg",
+  "detected_objects": [
+    {
+      "class": "phone",
+      "label": 2,
+      "confidence": 1.0,
+      "original_confidence": 0.9937291145324707,
+      "box": [
+        429.5569763183594,
+        626.981201171875,
+        1031.26318359375,
+        1653.077392578125
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "phone",
+      "label": 2,
+      "confidence": 1.0,
+      "original_confidence": 0.9937291145324707,
+      "box": [
+        429.5569763183594,
+        626.981201171875,
+        1031.26318359375,
+        1653.077392578125
+      ]
+    }
+  ],
+  "category": "other",
+  "status": "lost",
+  "timestamp": "2025-09-30T10:49:17.991621",
+  "source": "user_upload"
+}

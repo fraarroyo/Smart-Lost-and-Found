@@ -62,10 +62,34 @@
                             <div>
                                 <h5 class="mb-0">Location</h5>
                                 <p class="text-muted mb-0">{{ item.location or 'Location not specified' }}</p>
+                                {% if item.latitude and item.longitude %}
+                                <small class="text-muted">
+                                    <i class="bi bi-geo"></i> 
+                                    {{ "%.6f"|format(item.latitude) }}, {{ "%.6f"|format(item.longitude) }}
+                                </small>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Map Display -->
+                {% if item.latitude and item.longitude %}
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-map me-2"></i>Location Map
+                                </h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="itemLocationMap" style="height: 300px; width: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
 
                 {% if item.brand %}
                 <div class="row mb-4">
@@ -242,4 +266,43 @@
         </div>
     </div>
 </div>
+
+{% if item.latitude and item.longitude %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Define Rinconada area bounds
+    const rinconadaBounds = [
+        [13.2, 123.2],  // Southwest corner
+        [13.6, 123.7]   // Northeast corner
+    ];
+    
+    // Initialize map for viewing item location
+    const map = L.map('itemLocationMap', {
+        maxBounds: rinconadaBounds,
+        maxBoundsViscosity: 1.0
+    }).setView([{{ item.latitude }}, {{ item.longitude }}], 15);
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 16
+    }).addTo(map);
+    
+    // Restrict map to Rinconada area bounds
+    map.setMaxBounds(rinconadaBounds);
+    
+    // Add marker for the item location
+    const marker = L.marker([{{ item.latitude }}, {{ item.longitude }}]).addTo(map);
+    
+    // Add popup with item information
+    marker.bindPopup(`
+        <div class="text-center">
+            <strong>{{ item.title }}</strong><br>
+            <small class="text-muted">{{ item.status|title }} Item</small><br>
+            <small class="text-muted">{{ item.location }}</small>
+        </div>
+    `).openPopup();
+});
+</script>
+{% endif %}
 {% endblock %} 

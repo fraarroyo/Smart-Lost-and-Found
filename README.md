@@ -51,6 +51,43 @@ The application will be available at `http://localhost:5000`
 4. Add new items using the "Add Item" button
 5. View item details by clicking on any item
 
+### Testing & Evaluation
+
+#### Text model evaluation (RNN and BERT)
+
+We provide two standalone evaluators:
+
+1) BidirectionalDescriptionRNN classifier
+
+Run evaluation on a labeled text dataset (JSONL or CSV) with fields `text` and `label` (int):
+
+```bash
+python evaluate_rnn_text.py --data path/to/dataset.jsonl --format jsonl --batch-size 64
+# or CSV
+python evaluate_rnn_text.py --data path/to/dataset.csv --format csv
+```
+
+Notes:
+- The evaluator will load weights from `models/rnn_models/description_birnn.pth` if present.
+- If no vocabulary has been saved, a simple whitespace vocabulary is built from the dataset on-the-fly.
+- Outputs accuracy and a classification report (requires scikit-learn).
+
+2) BERT similarity evaluator
+
+Evaluate BERT-based similarity on pairs of texts. Dataset should contain `text1`, `text2`, and `label` (float similarity in [0,1] or 0/1):
+
+```bash
+# Regression metrics (Pearson/Spearman/MSE)
+python evaluate_bert_text.py --data pairs.jsonl --format jsonl --mode regression
+
+# Classification metrics (Accuracy, Precision, Recall, F1 at threshold)
+python evaluate_bert_text.py --data pairs.csv --format csv --mode classification --threshold 0.5
+```
+
+Notes:
+- Uses the unified model's BERT components from `ml_models.UnifiedModel` (lazy-loaded).
+- Requires `transformers` and optionally `scipy`/`scikit-learn` for full metrics.
+
 ## Security Features
 
 - Password hashing using Werkzeug

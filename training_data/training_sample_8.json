@@ -1,0 +1,37 @@
+{
+  "item_id": 8,
+  "image_path": "uploads/5bdc7356-89ca-4944-9c9f-8f4c83d6bf21.jpg",
+  "detected_objects": [
+    {
+      "class": "tumbler",
+      "label": 3,
+      "confidence": 0.8056751132011414,
+      "original_confidence": 0.7806751132011414,
+      "box": [
+        301.0959167480469,
+        538.6131591796875,
+        1256.1275634765625,
+        1915.120849609375
+      ]
+    }
+  ],
+  "user_labels": [],
+  "auto_labels": [
+    {
+      "class": "tumbler",
+      "label": 3,
+      "confidence": 0.8056751132011414,
+      "original_confidence": 0.7806751132011414,
+      "box": [
+        301.0959167480469,
+        538.6131591796875,
+        1256.1275634765625,
+        1915.120849609375
+      ]
+    }
+  ],
+  "category": "electronics",
+  "status": "lost",
+  "timestamp": "2025-09-30T13:09:05.638754",
+  "source": "user_upload"
+}

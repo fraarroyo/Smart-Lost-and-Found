@@ -1,0 +1,121 @@
+text1,text2,label,type
+"Lost black iPhone 12 with cracked screen","Found iPhone with cracked screen",0.9,high_similarity
+"Lost black iPhone 12 with cracked screen","Found Samsung Galaxy phone",0.3,low_similarity
+"Lost black iPhone 12 with cracked screen","Lost wallet with credit cards",0.2,low_similarity
+"Lost black iPhone 12 with cracked screen","Found black smartphone",0.8,high_similarity
+"Lost black iPhone 12 with cracked screen","Lost keys and keychain",0.1,low_similarity
+"Lost wallet with credit cards","Found wallet with ID and money",0.9,high_similarity
+"Lost wallet with credit cards","Found leather wallet",0.8,high_similarity
+"Lost wallet with credit cards","Lost phone charger",0.2,low_similarity
+"Lost wallet with credit cards","Found black wallet",0.7,medium_similarity
+"Lost wallet with credit cards","Lost car keys",0.1,low_similarity
+"Lost car keys with keychain","Found keys with keychain",0.9,high_similarity
+"Lost car keys with keychain","Found house keys",0.6,medium_similarity
+"Lost car keys with keychain","Lost wallet",0.1,low_similarity
+"Lost car keys with keychain","Found keychain with keys",0.8,high_similarity
+"Lost car keys with keychain","Lost phone",0.1,low_similarity
+"Lost laptop computer","Found laptop bag",0.7,medium_similarity
+"Lost laptop computer","Found MacBook Pro",0.8,high_similarity
+"Lost laptop computer","Lost mouse",0.3,low_similarity
+"Lost laptop computer","Found computer",0.9,high_similarity
+"Lost laptop computer","Lost charger",0.2,low_similarity
+"Lost glasses in case","Found eyeglasses",0.8,high_similarity
+"Lost glasses in case","Found reading glasses",0.7,medium_similarity
+"Lost glasses in case","Lost sunglasses",0.6,medium_similarity
+"Lost glasses in case","Lost watch",0.2,low_similarity
+"Lost glasses in case","Found glasses case",0.9,high_similarity
+"Lost watch with leather strap","Found wristwatch",0.8,high_similarity
+"Lost watch with leather strap","Found digital watch",0.6,medium_similarity
+"Lost watch with leather strap","Lost bracelet",0.4,low_similarity
+"Lost watch with leather strap","Found leather watch",0.9,high_similarity
+"Lost watch with leather strap","Lost ring",0.2,low_similarity
+"Lost backpack with books","Found school bag",0.8,high_similarity
+"Lost backpack with books","Found backpack",0.9,high_similarity
+"Lost backpack with books","Lost laptop bag",0.5,medium_similarity
+"Lost backpack with books","Found books",0.6,medium_similarity
+"Lost backpack with books","Lost purse",0.2,low_similarity
+"Lost umbrella black","Found black umbrella",0.9,high_similarity
+"Lost umbrella black","Found umbrella",0.8,high_similarity
+"Lost umbrella black","Lost raincoat",0.3,low_similarity
+"Lost umbrella black","Found folding umbrella",0.7,medium_similarity
+"Lost umbrella black","Lost hat",0.1,low_similarity
+"Lost water bottle blue","Found blue bottle",0.8,high_similarity
+"Lost water bottle blue","Found water bottle",0.9,high_similarity
+"Lost water bottle blue","Lost coffee cup",0.3,low_similarity
+"Lost water bottle blue","Found sports bottle",0.7,medium_similarity
+"Lost water bottle blue","Lost thermos",0.4,low_similarity
+"Lost headphones wireless","Found wireless earbuds",0.8,high_similarity
+"Lost headphones wireless","Found headphones",0.9,high_similarity
+"Lost headphones wireless","Lost phone charger",0.2,low_similarity
+"Lost headphones wireless","Found earbuds",0.7,medium_similarity
+"Lost headphones wireless","Lost speaker",0.3,low_similarity
+"Lost jacket black leather","Found black jacket",0.8,high_similarity
+"Lost jacket black leather","Found leather jacket",0.9,high_similarity
+"Lost jacket black leather","Lost coat",0.6,medium_similarity
+"Lost jacket black leather","Found hoodie",0.4,low_similarity
+"Lost jacket black leather","Lost sweater",0.3,low_similarity
+"Lost bike helmet red","Found red helmet",0.8,high_similarity
+"Lost bike helmet red","Found bike helmet",0.9,high_similarity
+"Lost bike helmet red","Lost bike lock",0.3,low_similarity
+"Lost bike helmet red","Found safety helmet",0.7,medium_similarity
+"Lost bike helmet red","Lost cap",0.2,low_similarity
+"Lost camera digital","Found digital camera",0.9,high_similarity
+"Lost camera digital","Found camera",0.8,high_similarity
+"Lost camera digital","Lost phone",0.3,low_similarity
+"Lost camera digital","Found video camera",0.6,medium_similarity
+"Lost camera digital","Lost tripod",0.2,low_similarity
+"Lost book novel","Found book",0.8,high_similarity
+"Lost book novel","Found novel",0.9,high_similarity
+"Lost book novel","Lost magazine",0.4,low_similarity
+"Lost book novel","Found paperback",0.7,medium_similarity
+"Lost book novel","Lost notebook",0.3,low_similarity
+"Lost pen blue ink","Found blue pen",0.8,high_similarity
+"Lost pen blue ink","Found pen",0.9,high_similarity
+"Lost pen blue ink","Lost pencil",0.5,medium_similarity
+"Lost pen blue ink","Found marker",0.4,low_similarity
+"Lost pen blue ink","Lost highlighter",0.3,low_similarity
+"Lost mouse computer","Found computer mouse",0.9,high_similarity
+"Lost mouse computer","Found wireless mouse",0.8,high_similarity
+"Lost mouse computer","Lost keyboard",0.4,low_similarity
+"Lost mouse computer","Found trackpad",0.6,medium_similarity
+"Lost mouse computer","Lost charger",0.2,low_similarity
+"Lost charger phone","Found phone charger",0.9,high_similarity
+"Lost charger phone","Found USB cable",0.7,medium_similarity
+"Lost charger phone","Lost power bank",0.5,medium_similarity
+"Lost charger phone","Found adapter",0.6,medium_similarity
+"Lost charger phone","Lost headphones",0.2,low_similarity
+"Lost ring gold","Found gold ring",0.9,high_similarity
+"Lost ring gold","Found ring",0.8,high_similarity
+"Lost ring gold","Lost bracelet",0.4,low_similarity
+"Lost ring gold","Found jewelry",0.6,medium_similarity
+"Lost ring gold","Lost necklace",0.3,low_similarity
+"Lost sunglasses black","Found black sunglasses",0.9,high_similarity
+"Lost sunglasses black","Found sunglasses",0.8,high_similarity
+"Lost sunglasses black","Lost regular glasses",0.4,low_similarity
+"Lost sunglasses black","Found shades",0.7,medium_similarity
+"Lost sunglasses black","Lost hat",0.2,low_similarity
+"Lost hat baseball cap","Found baseball cap",0.9,high_similarity
+"Lost hat baseball cap","Found cap",0.8,high_similarity
+"Lost hat baseball cap","Lost beanie",0.5,medium_similarity
+"Lost hat baseball cap","Found visor",0.6,medium_similarity
+"Lost hat baseball cap","Lost helmet",0.3,low_similarity
+"Lost scarf red","Found red scarf",0.8,high_similarity
+"Lost scarf red","Found scarf",0.9,high_similarity
+"Lost scarf red","Lost shawl",0.6,medium_similarity
+"Lost scarf red","Found wrap",0.5,medium_similarity
+"Lost scarf red","Lost gloves",0.2,low_similarity
+"Lost gloves winter","Found winter gloves",0.9,high_similarity
+"Lost gloves winter","Found gloves",0.8,high_similarity
+"Lost gloves winter","Lost mittens",0.7,medium_similarity
+"Lost gloves winter","Found hand warmers",0.4,low_similarity
+"Lost gloves winter","Lost hat",0.2,low_similarity
+"Lost bag handbag","Found handbag",0.9,high_similarity
+"Lost bag handbag","Found purse",0.8,high_similarity
+"Lost bag handbag","Found tote bag",0.7,medium_similarity
+"Lost bag handbag","Lost backpack",0.5,medium_similarity
+"Lost bag handbag","Lost wallet",0.3,low_similarity
+"Lost shoes sneakers","Found sneakers",0.9,high_similarity
+"Lost shoes sneakers","Found shoes",0.8,high_similarity
+"Lost shoes sneakers","Lost boots",0.5,medium_similarity
+"Lost shoes sneakers","Found athletic shoes",0.8,high_similarity
+"Lost shoes sneakers","Lost sandals",0.4,low_similarity

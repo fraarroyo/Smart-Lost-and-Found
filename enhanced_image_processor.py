@@ -74,15 +74,10 @@ class EnhancedImageProcessor:
             rnn_results = self._rnn_analysis(image_path, rnn_analyzer)
             print(f"   ✅ RNN analysis completed with confidence {rnn_results.get('confidence', 0):.2f}")
             
-            # Step 3: Optional BERT Text Analysis (only if high confidence objects detected)
-            bert_results = {}
-            if rcnn_results.get('object_confidence', 0) > 0.7:  # Only run BERT for high-confidence detections
-                print("   📝 Step 3: BERT Text Analysis...")
-                bert_results = self._bert_analysis(image_path, text_analyzer)
-                print(f"   ✅ BERT analysis completed")
-            else:
-                print("   ⏭️  Step 3: Skipping BERT analysis (low confidence detection)")
-                bert_results = {'description': '', 'text_confidence': 0.0}
+            # Step 3: BERT Text Analysis (always run in comprehensive mode)
+            print("   📝 Step 3: BERT Text Analysis...")
+            bert_results = self._bert_analysis(image_path, text_analyzer)
+            print(f"   ✅ BERT analysis completed with confidence {bert_results.get('text_confidence', 0):.2f}")
             
             # Step 4: Fusion and Integration
             print("   🔗 Step 4: Multi-Modal Fusion...")

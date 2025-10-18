@@ -129,32 +129,56 @@
                             </div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="brand" class="form-label fw-bold">Brand (optional)</label>
+                            <label for="brand" class="form-label fw-bold">Brand <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-tag"></i></span>
-                                <input type="text" class="form-control" id="brand" name="brand" 
+                                <input type="text" class="form-control" id="brand" name="brand" required
                                        placeholder="e.g., Apple, Samsung, Nike, etc.">
                             </div>
-                            <div class="form-text">Enter the brand or manufacturer if known</div>
+                            <div class="form-text">Enter the brand or manufacturer (use "N/A" if unknown)</div>
                         </div>
                     </div>
 
-                    <!-- Location Section -->
+                    <!-- Location Section with Map -->
                     <div class="mb-4">
                         <label for="location" class="form-label fw-bold" id="locationLabel">
                             <i class="bi bi-geo-alt me-2"></i>Location <span class="text-danger">*</span>
                         </label>
-                        <div class="input-group">
+                        
+                        <!-- Location Input -->
+                        <div class="input-group mb-3">
                             <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
                             <input type="text" class="form-control" id="location" name="location" required
                                    placeholder="Enter the location where the item was lost/found">
+                            <button class="btn btn-outline-secondary" type="button" id="useCurrentLocation">
+                                <i class="bi bi-crosshair"></i> Use Current Location
+                            </button>
                             <div class="invalid-feedback">
                                 Please provide the location.
                             </div>
                         </div>
+                        
+                        <!-- Map Container -->
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-map me-2"></i>Select Location on Map
+                                </h6>
+                                <small class="text-muted">Click on the map to set location</small>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="locationMap" style="height: 400px; width: 100%; min-height: 400px; background-color: #f8f9fa; border: 1px solid #dee2e6;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Hidden coordinate fields -->
+                        <input type="hidden" id="latitude" name="latitude">
+                        <input type="hidden" id="longitude" name="longitude">
+                        
                         <div class="form-text">
                             <i class="bi bi-info-circle me-1"></i>
-                            Be as specific as possible (e.g., "Main Street near Starbucks" instead of just "Main Street")
+                            Search for a location or click on the map to set the exact position. This helps with better matching.
+                            <br><strong>Area Restriction:</strong> Only locations within the Rinconada area (Iriga City, Baao, Buhi, Nabua, Bato) are allowed.
                         </div>
                     </div>
 
@@ -491,10 +515,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <strong>${item.item_type || 'Unknown'}</strong>
                                     </div>
                                     <div class="col-md-6">
-                                        <small class="text-muted">Color:</small><br>
-                                        <strong>${item.color || 'Unknown'}</strong>
-                                    </div>
-                                    <div class="col-md-6">
                                         <small class="text-muted">Size:</small><br>
                                         <strong>${item.size || 'Unknown'}</strong>
                                     </div>
@@ -828,9 +848,41 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Clear draft on successful form submission
-    document.getElementById('addItemForm').addEventListener('submit', function() {
+    document.getElementById('addItemForm').addEventListener('submit', function(e) {
+        // Validate brand field
+        const brandField = document.getElementById('brand');
+        if (!brandField.value.trim()) {
+            brandField.value = 'N/A';
+        }
+        
         localStorage.removeItem('description_draft');
     });
+});
+</script>
+
+<script src="{{ url_for('static', filename='js/map_location.js') }}"></script>
+<script>
+// Initialize location picker map after the script is loaded
+let locationPicker = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait a bit for the map container to be ready
+    setTimeout(() => {
+        if (typeof initLocationPicker === 'function') {
+            locationPicker = initLocationPicker('locationMap');
+            
+            // Add current location button functionality
+            document.getElementById('useCurrentLocation').addEventListener('click', function() {
+                if (typeof getCurrentLocation === 'function') {
+                    getCurrentLocation((lat, lng) => {
+                        locationPicker.setLocation(lat, lng);
+                    });
+                }
+            });
+        } else {
+            console.error('initLocationPicker function not found. Make sure map_location.js is loaded.');
+        }
+    }, 500);
 });
 </script>
 {% endblock %} 

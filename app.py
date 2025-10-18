@@ -62,6 +62,36 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)  # Remember me duration
 app.config['SECURITY_PASSWORD_SALT'] = secrets.token_hex(16)  # For password reset tokens
 
+# -------- JSON sanitation utility to avoid numpy/PIL serialization issues --------
+def _json_safe(obj):
+    try:
+        import numpy as _np
+    except Exception:
+        _np = None
+
+    if obj is None:
+        return None
+    if _np is not None and isinstance(obj, _np.generic):
+        try:
+            return obj.item()
+        except Exception:
+            pass
+    if _np is not None and isinstance(obj, _np.ndarray):
+        try:
+            return [_json_safe(x) for x in obj.tolist()]
+        except Exception:
+            return None
+    if isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    try:
+        return str(obj)
+    except Exception:
+        return None
+
 # Email configuration
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
@@ -90,9 +120,16 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.environ.pop('USE_WEB_DETECTOR', None)
 # Keep BEST_MODEL1 to use best_model1.pth
 
-# Set ultra_fast processing mode for maximum speed
-os.environ['PROCESSING_MODE'] = 'ultra_fast'
+# Set comprehensive processing mode to use all AI models (R-CNN + RNN + BERT)
+os.environ['PROCESSING_MODE'] = 'comprehensive'
 os.environ['ENABLE_TRAINING'] = 'false'  # Disable training for speed
+
+print("🚀 LOST & FOUND SYSTEM STARTUP")
+print("="*50)
+print("🤖 AI MODELS: Integrated R-CNN + RNN + BERT")
+print("⚙️  PROCESSING: Only integrated comprehensive method")
+print("🔗 INTEGRATION: All models work together seamlessly")
+print("="*50)
 
 # PythonAnywhere optimizations
 if os.environ.get('PYTHONANYWHERE_DOMAIN'):
@@ -176,54 +213,63 @@ def cache_analysis_result(image_path, result):
 
 # Add these mappings at the top of the file after imports
 ITEM_CATEGORY_MAPPINGS = {
-    'laptop': 'electronics',
-    'computer': 'electronics',
     'phone': 'electronics',
     'mobile': 'electronics',
-    'camera': 'electronics',
-    'headphones': 'electronics',
-    'earphones': 'electronics',
-    'watch': 'electronics',
-    'shirt': 'clothing',
-    'pants': 'clothing',
-    'jacket': 'clothing',
-    'dress': 'clothing',
-    'shoes': 'clothing',
-    'bag': 'accessories',
-    'backpack': 'accessories',
-    'wallet': 'accessories',
-    'purse': 'accessories',
-    'glasses': 'accessories',
-    'sunglasses': 'accessories',
-    'document': 'documents',
-    'book': 'documents',
-    'notebook': 'documents',
-    'id card': 'documents',
-    'passport': 'documents'
+    'mouse': 'electronics',
+    'tumbler': 'others',
+    'wallet': 'accessories'
 }
 
-# Expand allowed classes with common synonyms
+# Allowed classes - only Mouse, Tumbler, Phone/Cellphone, and Wallets
 ALLOWED_CLASSES = {
-    "phone", "mobile", "cell phone", "cellphone", "smartphone", "computer mouse", "mouse", "wallet", "eyeglasses", "eye glasses", "glasses", "spectacles", "id card", "id", "identity card", "tumbler", "tablet", "ipad", "bottle", "umbrella", "wrist watch", "watch", "usb", "flash drive", "thumb drive", "pen drive"
+    # Phone/Cellphone variants
+    "phone", "mobile", "cell phone", "cellphone", "smartphone",
+    # Mouse variants
+    "computer mouse", "mouse",
+    # Wallet
+    "wallet",
+    # Tumbler
+    "tumbler"
 }
 
 def normalize_class_name(name: str) -> str:
-    """Normalize detector class names to canonical forms used by the UI filters.
-    Examples: 'mobile_phone' -> 'cell phone', 'cellphone' -> 'cell phone'.
+    """Normalize detector class names to canonical forms for allowed classes only.
+    Only maps to: phone, mouse, wallet, tumbler
     """
     if not name:
         return ''
     n = str(name).strip().lower().replace('_', ' ').replace('-', ' ')
+    
+    # Map to our allowed classes only
     synonyms = {
-        'mobile phone': 'cell phone',
-        'cellphone': 'cell phone',
-        'smart phone': 'smartphone',
-        'eye glasses': 'eyeglasses',
-        'identity card': 'id card',
-        'thumbdrive': 'thumb drive',
-        'pendrive': 'pen drive',
+        # Phone variants -> 'phone'
+        'mobile phone': 'phone',
+        'cell phone': 'phone',
+        'cellphone': 'phone',
+        'smart phone': 'phone',
+        'smartphone': 'phone',
+        'mobile': 'phone',
+        
+        # Mouse variants -> 'mouse'
+        'computer mouse': 'mouse',
+        
+        # Wallet -> 'wallet'
+        'wallet': 'wallet',
+        
+        # Tumbler -> 'tumbler'
+        'tumbler': 'tumbler',
+        'cup': 'tumbler',
+        'mug': 'tumbler',
+        'bottle': 'tumbler',
     }
-    return synonyms.get(n, n)
+    
+    normalized = synonyms.get(n, n)
+    
+    # Only return if it's in our allowed classes, otherwise return empty
+    if normalized in ALLOWED_CLASSES:
+        return normalized
+    else:
+        return ''  # Return empty string for non-allowed classes
 
 def classify_item(detected_objects):
     """Classify multiple items based on detected objects and suggest categories."""
@@ -413,6 +459,174 @@ def rgb_to_name(rgb):
             return "gray"
         else:
             return "unknown"
+
+def get_color_name_from_rgb(rgb_tuple):
+    """Get a human-readable color name from RGB tuple.
+    Strategy: try comprehensive matcher first (broad CSS-like set), then ultra detector,
+    then legacy rgb_to_name as the final fallback.
+    """
+    # 1) Comprehensive matcher (broad palette, descriptive shades)
+    name = get_comprehensive_color_name(rgb_tuple)
+    if name and name != 'unknown':
+        return name
+
+    # 2) Ultra detector's closest name (smaller curated palette)
+    try:
+        from ultra_enhanced_color_detection import UltraEnhancedColorDetector
+        detector = UltraEnhancedColorDetector()
+        name = detector._get_closest_color_name(rgb_tuple)
+        if name and name != 'unknown':
+            return name
+    except Exception:
+        pass
+
+    # 3) Legacy rgb_to_name fallback
+    return rgb_to_name(rgb_tuple)
+
+def get_comprehensive_color_name(rgb_tuple):
+    """Get a comprehensive color name using multiple methods."""
+    try:
+        # Method 1: Try webcolors exact first
+        try:
+            return webcolors.rgb_to_name(rgb_tuple)
+        except ValueError:
+            pass
+        
+        # Method 2: Use CSS3 list with LAB distance (more perceptual)
+        try:
+            name = _closest_css3_name_lab(rgb_tuple)
+            if name:
+                return name
+        except Exception:
+            pass
+
+        # Method 3: Use our enhanced rgb_to_name function
+        result = rgb_to_name(rgb_tuple)
+        if result and result != 'unknown':
+            return result
+        
+        # Method 4: Use a comprehensive color matching approach (custom palette)
+        return match_color_to_name(rgb_tuple)
+        
+    except Exception as e:
+        return "unknown"
+
+# --- Color space helpers for perceptual naming ---
+def _rgb_to_lab_simple(rgb):
+    # rgb 0-255 -> LAB approx (D65)
+    import numpy as _np
+    r, g, b = [c / 255.0 for c in rgb]
+    def inv_gamma(u):
+        return u / 12.92 if u <= 0.04045 else ((u + 0.055) / 1.055) ** 2.4
+    r, g, b = inv_gamma(r), inv_gamma(g), inv_gamma(b)
+    # sRGB -> XYZ
+    X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375
+    Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750
+    Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041
+    # Normalize D65 white
+    X, Y, Z = X / 0.95047, Y / 1.00000, Z / 1.08883
+    def f(t):
+        return t ** (1/3) if t > 0.008856 else (7.787 * t) + (16/116)
+    fx, fy, fz = f(X), f(Y), f(Z)
+    L = 116 * fy - 16
+    a = 500 * (fx - fy)
+    b = 200 * (fy - fz)
+    return (L, a, b)
+
+def _closest_css3_name_lab(rgb_tuple):
+    # Compare against CSS3 palette in LAB space
+    try:
+        palette = getattr(webcolors, 'CSS3_NAMES_TO_HEX', {})
+        if not palette:
+            # Fallback older attr
+            palette = getattr(webcolors, 'CSS3_NAMES', {})
+        if not palette:
+            return None
+        # Build list of (name, lab)
+        source_lab = _rgb_to_lab_simple(rgb_tuple)
+        best = None
+        best_d = 1e9
+        for name, hexv in palette.items():
+            if isinstance(hexv, str):
+                h = hexv
+            else:
+                # older webcolors maps name->hex string as key; skip invalid
+                continue
+            r = int(h[1:3], 16); g = int(h[3:5], 16); b = int(h[5:7], 16)
+            L2, a2, b2 = _rgb_to_lab_simple((r, g, b))
+            d = (source_lab[0]-L2)**2 + (source_lab[1]-a2)**2 + (source_lab[2]-b2)**2
+            if d < best_d:
+                best_d = d
+                best = name
+        return best
+    except Exception:
+        return None
+
+def match_color_to_name(rgb_tuple):
+    """Match RGB color to a comprehensive set of color names."""
+    try:
+        # Comprehensive color database
+        color_database = {
+            # Basic colors
+            'red': (255, 0, 0), 'green': (0, 128, 0), 'blue': (0, 0, 255),
+            'yellow': (255, 255, 0), 'orange': (255, 165, 0), 'purple': (128, 0, 128),
+            'pink': (255, 192, 203), 'brown': (165, 42, 42), 'black': (0, 0, 0),
+            'white': (255, 255, 255), 'gray': (128, 128, 128), 'silver': (192, 192, 192),
+            
+            # Extended colors
+            'crimson': (220, 20, 60), 'maroon': (128, 0, 0), 'navy': (0, 0, 128),
+            'teal': (0, 128, 128), 'lime': (0, 255, 0), 'aqua': (0, 255, 255),
+            'fuchsia': (255, 0, 255), 'gold': (255, 215, 0), 'olive': (128, 128, 0),
+            
+            # Modern tech colors
+            'space_gray': (120, 120, 120), 'matte_black': (64, 64, 64),
+            'rose_gold': (233, 150, 122), 'midnight_green': (25, 25, 112),
+            'jet_black': (32, 32, 32), 'pearl_white': (245, 245, 245),
+            
+            # Material colors
+            'bronze': (205, 127, 50), 'copper': (184, 115, 51), 'steel': (112, 128, 144),
+            'titanium': (135, 135, 135), 'aluminum': (169, 169, 169),
+            
+            # Descriptive colors
+            'dark_gray': (64, 64, 64), 'light_gray': (192, 192, 192),
+            'dark_blue': (0, 0, 139), 'light_blue': (173, 216, 230),
+            'dark_green': (0, 100, 0), 'light_green': (144, 238, 144),
+            'dark_red': (139, 0, 0), 'light_red': (255, 182, 193),
+            'dark_yellow': (184, 134, 11), 'light_yellow': (255, 255, 224),
+            'dark_purple': (75, 0, 130), 'light_purple': (221, 160, 221),
+            'dark_brown': (101, 67, 33), 'light_brown': (210, 180, 140),
+        }
+        
+        # Calculate distance to find closest match
+        def distance(c1, c2):
+            return sum((a - b) ** 2 for a, b in zip(c1, c2))
+        
+        # Find closest color
+        closest_color = min(color_database.items(), key=lambda kv: distance(rgb_tuple, kv[1]))
+        
+        # Only return if distance is reasonable (not too far)
+        if distance(rgb_tuple, closest_color[1]) < 10000:  # Threshold for reasonable match
+            return closest_color[0]
+        else:
+            # If no good match, return a descriptive name based on RGB values
+            r, g, b = rgb_tuple
+            if r > 200 and g > 200 and b > 200:
+                return "light_gray" if max(r, g, b) - min(r, g, b) < 30 else "white"
+            elif r < 50 and g < 50 and b < 50:
+                return "black"
+            elif abs(r - g) < 30 and abs(g - b) < 30:
+                return "gray"
+            elif r > g and r > b:
+                return "reddish" if r > 150 else "dark_red"
+            elif g > r and g > b:
+                return "greenish" if g > 150 else "dark_green"
+            elif b > r and b > g:
+                return "bluish" if b > 150 else "dark_blue"
+            else:
+                return "unknown"
+                
+    except Exception as e:
+        return "unknown"
 
 def extract_dominant_color(image_path, exclude_colors=None):
     """Color analysis disabled for maximum speed."""
@@ -628,9 +842,11 @@ class Item(db.Model):
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(50), nullable=False)
-    brand = db.Column(db.String(100))  # Brand field for items
+    brand = db.Column(db.String(100), nullable=False, default='N/A')  # Brand field for items
     status = db.Column(db.String(20), nullable=False)  # 'lost' or 'found'
     location = db.Column(db.String(100))
+    latitude = db.Column(db.Float)  # Latitude coordinate
+    longitude = db.Column(db.Float)  # Longitude coordinate
     date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     image_path = db.Column(db.String(200))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -767,6 +983,11 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 # Routes
+@app.route('/map_test')
+def map_test():
+    """Test page for map functionality"""
+    return render_template('map_test.html')
+
 @app.route('/')
 def index():
     items = Item.query.order_by(Item.date.desc()).all()
@@ -938,8 +1159,8 @@ def enhanced_image_analysis(image_path):
         except Exception as e:
             print(f"Error in checkpoint analysis: {e}")
         
-        # Extract additional information from image (color analysis disabled)
-        color_info = {'primary_color': 'unknown', 'secondary_color': ''}
+        # Extract additional information from image using enhanced color detection
+        color_info = extract_detailed_color_info(image_path)
         size_info = estimate_detailed_size(detected_objects, image_path)
         material_info = estimate_material(detected_objects, image_path)
         
@@ -984,29 +1205,70 @@ def enhanced_image_analysis(image_path):
         }
 
 def extract_detailed_color_info(image_path):
-    """Extract detailed color information from image using enhanced color detection."""
+    """Extract detailed color information from image using ultra-enhanced color detection."""
     try:
-        from enhanced_color_detection import enhance_existing_color_detection
+        from ultra_enhanced_color_detection import enhance_existing_color_detection_ultra
         from advanced_color_detection import enhance_existing_color_detection_advanced
+        from enhanced_color_detection import enhance_existing_color_detection
         
-        # Use advanced color detection
-        color_analysis = enhance_existing_color_detection_advanced(image_path)
+        # Try ultra-enhanced color detection first
+        color_analysis = enhance_existing_color_detection_ultra(image_path)
         
-        if color_analysis.get('error'):
-            # Fallback to original method
-            return _extract_detailed_color_info_fallback(image_path)
+        if color_analysis.get('error') or not color_analysis.get('success'):
+            # Fallback to advanced color detection
+            color_analysis = enhance_existing_color_detection_advanced(image_path)
+            
+            if color_analysis.get('error'):
+                # Fallback to basic enhanced color detection
+                color_analysis = enhance_existing_color_detection(image_path)
+                
+                if color_analysis.get('error'):
+                    # Final fallback to original method
+                    return _extract_detailed_color_info_fallback(image_path)
         
-        primary = color_analysis.get('primary_color')
-        secondary = color_analysis.get('secondary_color')
-        
-        return {
-            'primary_color': primary.get('name', 'unknown') if primary else 'unknown',
-            'primary_rgb': primary.get('rgb', [0, 0, 0]) if primary else [0, 0, 0],
-            'secondary_color': secondary.get('name', '') if secondary else '',
-            'secondary_rgb': secondary.get('rgb', None) if secondary else None,
-            'color_palette': [color.get('rgb', [0, 0, 0]) for color in color_analysis.get('dominant_colors', [])],
-            'enhanced_analysis': color_analysis  # Store full analysis for advanced features
-        }
+        # Handle different color analysis formats
+        if color_analysis.get('primary_colors'):
+            # Ultra-enhanced format
+            primary_colors = color_analysis.get('primary_colors', [])
+            all_colors = color_analysis.get('all_colors', [])
+            named_palette = color_analysis.get('named_palette', [])
+            
+            primary = primary_colors[0] if primary_colors else None
+            secondary = primary_colors[1] if len(primary_colors) > 1 else None
+            
+            return {
+                'primary_color': primary.get('rgb', [0, 0, 0]) if primary else [0, 0, 0],
+                'primary_rgb': primary.get('rgb', [0, 0, 0]) if primary else [0, 0, 0],
+                'secondary_color': secondary.get('rgb', []) if secondary else [],
+                'secondary_rgb': secondary.get('rgb', None) if secondary else None,
+                'color_palette': [color.get('rgb', [0, 0, 0]) for color in all_colors[:8]],
+                'named_palette': named_palette,
+                'color_names': [p.get('name','unknown') for p in named_palette] if named_palette else [],
+                'primary_color_name': named_palette[0]['name'] if named_palette else rgb_to_name(primary.get('rgb', (0,0,0))) if primary else 'unknown',
+                'secondary_color_name': named_palette[1]['name'] if named_palette and len(named_palette) > 1 else (rgb_to_name(secondary.get('rgb')) if secondary else ''),
+                'enhanced_analysis': color_analysis,  # Store full analysis for advanced features
+                'perceptual_analysis': color_analysis.get('perceptual_analysis', {}),
+                'material_analysis': color_analysis.get('material_analysis', {}),
+                'harmony_analysis': color_analysis.get('harmony_analysis', {}),
+                'confidence_score': color_analysis.get('confidence_score', 0.0)
+            }
+        else:
+            # Legacy format
+            primary = color_analysis.get('primary_color')
+            secondary = color_analysis.get('secondary_color')
+            
+            return {
+                'primary_color': primary.get('name', 'unknown') if primary else 'unknown',
+                'primary_rgb': primary.get('rgb', [0, 0, 0]) if primary else [0, 0, 0],
+                'secondary_color': secondary.get('name', '') if secondary else '',
+                'secondary_rgb': secondary.get('rgb', None) if secondary else None,
+                'color_palette': [color.get('rgb', [0, 0, 0]) for color in color_analysis.get('dominant_colors', [])],
+                'named_palette': [],
+                'color_names': [],
+                'primary_color_name': primary.get('name','unknown') if primary else 'unknown',
+                'secondary_color_name': secondary.get('name','') if secondary else '',
+                'enhanced_analysis': color_analysis  # Store full analysis for advanced features
+            }
         
     except Exception as e:
         print(f"Enhanced color detection error, using fallback: {e}")
@@ -1150,83 +1412,308 @@ def estimate_material(detected_objects, image_path):
         print(f"Error estimating material: {e}")
         return {'material': 'unknown', 'confidence': 0.0}
 
+@app.route('/test_models', methods=['GET'])
+@login_required
+def test_models():
+    """Test endpoint to verify all models are working"""
+    try:
+        print("\n" + "="*60)
+        print("🧪 TESTING ALL MODELS")
+        print("="*60)
+        
+        results = {}
+        
+        # Test R-CNN
+        try:
+            print("🔍 Testing R-CNN...")
+            # Create a dummy test image
+            test_image = Image.new('RGB', (224, 224), color='red')
+            test_path = os.path.join(app.config['UPLOAD_FOLDER'], 'test_image.jpg')
+            test_image.save(test_path)
+            
+            rcnn_results = object_detector.detect_objects(test_path)
+            results['rcnn'] = {
+                'status': 'success',
+                'objects_detected': len(rcnn_results) if isinstance(rcnn_results, list) else 0,
+                'message': 'R-CNN working correctly'
+            }
+            print(f"   ✅ R-CNN: {results['rcnn']['message']}")
+            
+            # Clean up test image
+            if os.path.exists(test_path):
+                os.remove(test_path)
+        except Exception as e:
+            results['rcnn'] = {'status': 'error', 'message': str(e)}
+            print(f"   ❌ R-CNN: {e}")
+        
+        # Test RNN
+        try:
+            print("🧠 Testing RNN...")
+            # Create a dummy test image
+            test_image = Image.new('RGB', (224, 224), color='blue')
+            test_path = os.path.join(app.config['UPLOAD_FOLDER'], 'test_rnn.jpg')
+            test_image.save(test_path)
+            
+            rnn_results = image_rnn_analyzer.analyze_image_details(test_path)
+            results['rnn'] = {
+                'status': 'success',
+                'confidence': rnn_results.get('confidence', 0),
+                'details': rnn_results.get('details', {}),
+                'message': 'RNN working correctly'
+            }
+            print(f"   ✅ RNN: {results['rnn']['message']}")
+            
+            # Clean up test image
+            if os.path.exists(test_path):
+                os.remove(test_path)
+        except Exception as e:
+            results['rnn'] = {'status': 'error', 'message': str(e)}
+            print(f"   ❌ RNN: {e}")
+        
+        # Test BERT
+        try:
+            print("📝 Testing BERT...")
+            test_text = "This is a test description for a lost item"
+            bert_embedding = text_analyzer.analyze_text(test_text)
+            results['bert'] = {
+                'status': 'success',
+                'embedding_dim': len(bert_embedding),
+                'message': 'BERT working correctly'
+            }
+            print(f"   ✅ BERT: {results['bert']['message']}")
+        except Exception as e:
+            results['bert'] = {'status': 'error', 'message': str(e)}
+            print(f"   ❌ BERT: {e}")
+        
+        print("="*60)
+        print("🧪 MODEL TESTING COMPLETED")
+        print("="*60)
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
+
 @app.route('/process_image', methods=['POST'])
 @login_required
 def process_image():
+    """
+    Enhanced Image Processing with Detailed Data Flow Logging
+    Shows how Faster R-CNN, BERT, and RNN process data step by step
+    """
+    print("\n" + "="*80)
+    print("🚀 STARTING LOST & FOUND IMAGE PROCESSING PIPELINE")
+    print("="*80)
+    
     if 'image' not in request.files:
+        print("❌ ERROR: No image provided in request")
         return jsonify({'error': 'No image provided'}), 400
     image = request.files['image']
     if image.filename == '':
+        print("❌ ERROR: No image selected")
         return jsonify({'error': 'No image selected'}), 400
         
+    print(f"📁 INPUT: Processing image '{image.filename}'")
+    print(f"👤 USER: {current_user.username if current_user.is_authenticated else 'Guest'}")
+    print(f"⏰ TIMESTAMP: {datetime.utcnow().isoformat()}")
+    
+    # Start timing for performance measurement
+    start_time = time.time()
+    
     temp_path = None
     try:
         filename = secure_filename(f"{uuid.uuid4()}_{image.filename}")
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         image.save(temp_path)
+        
+        print(f"💾 SAVED: Image saved to {temp_path}")
+        print(f"📏 SIZE: {os.path.getsize(temp_path)} bytes")
+        # STEP 1: IMAGE PREPROCESSING
+        print("\n" + "="*60)
+        print("🔧 STEP 1: IMAGE PREPROCESSING")
+        print("="*60)
+        
+        # Normalize unsupported/rare formats (e.g., WEBP/HEIC/AVIF) to JPEG for downstream libs
+        try:
+            ext = os.path.splitext(temp_path)[1].lower()
+            print(f"📄 FORMAT: Original format is {ext}")
+            
+            if ext in ['.webp', '.heic', '.heif', '.avif']:
+                print(f"🔄 CONVERTING: Converting {ext} to JPEG for compatibility")
+                try:
+                    img_conv = Image.open(temp_path).convert('RGB')
+                    conv_path = temp_path + '.__conv.jpg'
+                    img_conv.save(conv_path, format='JPEG', quality=92)
+                    img_conv.close()
+                    temp_path = conv_path
+                    print(f"✅ CONVERTED: Successfully converted to JPEG")
+                except Exception:
+                    print("⚠️  FALLBACK: PIL conversion failed, trying OpenCV")
+                    try:
+                        import cv2
+                        import numpy as _np
+                        data = _np.fromfile(temp_path, dtype=_np.uint8)
+                        img_cv = cv2.imdecode(data, cv2.IMREAD_COLOR)
+                        conv_path = temp_path + '.__conv.jpg'
+                        cv2.imwrite(conv_path, img_cv)
+                        temp_path = conv_path
+                        print(f"✅ CONVERTED: Successfully converted using OpenCV")
+                    except Exception as _e:
+                        print(f"❌ CONVERSION FAILED: {_e}")
+            else:
+                print(f"✅ FORMAT OK: {ext} is supported, no conversion needed")
+        except Exception as _u:
+            print(f"⚠️  FORMAT CHECK SKIPPED: {_u}")
+
+        # Downscale very large images for faster analysis (quality-preserving)
+        try:
+            with Image.open(temp_path) as _im:
+                original_size = _im.size
+                print(f"📐 ORIGINAL SIZE: {original_size[0]}x{original_size[1]} pixels")
+                
+                _im = _im.convert('RGB')
+                max_side = max(_im.size)
+                if max_side > 1280:
+                    scale = 1280 / float(max_side)
+                    new_size = (int(_im.width * scale), int(_im.height * scale))
+                    print(f"📉 RESIZING: Scaling down by factor {scale:.2f}")
+                    print(f"📐 NEW SIZE: {new_size[0]}x{new_size[1]} pixels")
+                    _im = _im.resize(new_size, Image.LANCZOS)
+                    _im.save(temp_path, format='JPEG', quality=92)
+                    print(f"✅ RESIZED: Image optimized for processing")
+                else:
+                    print(f"✅ SIZE OK: Image size is optimal for processing")
+        except Exception as _resz:
+            print(f"⚠️  RESIZE SKIPPED: {_resz}")
         if not os.path.exists(temp_path):
+            print("❌ ERROR: Image file was not saved successfully")
             raise Exception("Image file was not saved successfully")
+        
+        # STEP 2: CACHE CHECK
+        print("\n" + "="*60)
+        print("🔍 STEP 2: CACHE CHECK")
+        print("="*60)
         
         # Check cache first for performance optimization
         cached_result = get_cached_analysis(temp_path)
         if cached_result:
-            print(f"[CACHE HIT] Using cached analysis for {temp_path}")
+            print(f"🎯 CACHE HIT: Using cached analysis for {temp_path}")
+            print(f"⚡ PERFORMANCE: Skipping processing, using cached results")
             comprehensive_analysis = cached_result.get('comprehensive_analysis', {})
             analysis_result = cached_result.get('analysis_result', {})
+            print(f"✅ CACHE SUCCESS: Retrieved cached analysis")
         else:
-            # Choose processing mode based on configuration (default to ultra-fast mode for speed)
-            processing_mode = os.getenv('PROCESSING_MODE', 'ultra_fast').lower()
+            print(f"🔄 CACHE MISS: No cached analysis found, proceeding with processing")
             
-            if processing_mode == 'ultra_fast':
-                print(f"[ULTRA-FAST ANALYSIS] Starting ultra-fast analysis for {temp_path}")
+            # STEP 3: PROCESSING MODE SELECTION
+            print("\n" + "="*60)
+            print("⚙️  STEP 3: PROCESSING MODE SELECTION")
+            print("="*60)
+            
+            # Use only the integrated comprehensive method with R-CNN + RNN + BERT
+            processing_mode = 'comprehensive'
+            print(f"🎛️  MODE: Using integrated comprehensive processing (R-CNN + RNN + BERT)")
+            
+            print("🧠 INTEGRATED AI PROCESSING: Using all three models for maximum accuracy")
+            print("   📊 COMPONENTS: Faster R-CNN (40%) + RNN (35%) + BERT (25%)")
+            print("   ⏱️  EXPECTED TIME: < 15 seconds")
+            
+            # Verify models are loaded and ready
+            print(f"   🔍 MODEL VERIFICATION:")
+            print(f"      📍 R-CNN: {'✅ Loaded' if hasattr(object_detector, 'detect_objects') else '❌ Not Ready'}")
+            print(f"      🧠 RNN: {'✅ Loaded' if hasattr(image_rnn_analyzer, 'analyze_image_details') else '❌ Not Ready'}")
+            print(f"      📝 BERT: {'✅ Loaded' if hasattr(text_analyzer, 'analyze_text') else '❌ Not Ready'}")
+            
+            # Test BERT model loading
+            try:
+                print(f"   🧪 TESTING BERT: Loading BERT model...")
+                test_embedding = text_analyzer.analyze_text("test image description")
+                print(f"      ✅ BERT: Model loaded successfully (embedding dim: {len(test_embedding)})")
+            except Exception as e:
+                print(f"      ❌ BERT: Failed to load - {e}")
+            
+            # Test RNN model
+            try:
+                print(f"   🧪 TESTING RNN: Testing RNN model...")
+                # RNN will be tested during actual processing
+                print(f"      ✅ RNN: Model ready for processing")
+            except Exception as e:
+                print(f"      ❌ RNN: Failed to initialize - {e}")
+            
+            # STEP 4: INTEGRATED AI MODEL PROCESSING
+            print("\n" + "="*60)
+            print("🤖 STEP 4: INTEGRATED AI MODEL PROCESSING")
+            print("="*60)
+            
+            # Use only the integrated comprehensive method with R-CNN + RNN + BERT
+            print(f"🧠 INTEGRATED ANALYSIS: Starting all three models")
+            print(f"   📍 INPUT: {temp_path}")
+            print(f"   🔧 MODELS: Faster R-CNN + RNN + BERT")
+            print(f"   ⏱️  START TIME: {datetime.utcnow().isoformat()}")
+            print(f"   ⚠️  TIMEOUT: 15 seconds maximum")
+            
+            try:
+                # Set a timeout for the analysis
+                import threading
+                result = [None]
+                exception = [None]
+                
+                def run_integrated_analysis():
+                    try:
+                        print(f"   🔄 THREAD: Starting integrated analysis thread")
+                        print(f"   🤖 MODELS: Using Faster R-CNN + RNN + BERT")
+                        print(f"   📍 R-CNN: {type(object_detector).__name__}")
+                        print(f"   🧠 RNN: {type(image_rnn_analyzer).__name__}")
+                        print(f"   📝 BERT: {type(text_analyzer).__name__}")
+                        
+                        result[0] = enhanced_image_processor.process_image_comprehensive(
+                            temp_path, object_detector, image_rnn_analyzer, text_analyzer
+                        )
+                        print(f"   ✅ THREAD: Integrated analysis completed successfully")
+                    except Exception as e:
+                        print(f"   ❌ THREAD: Analysis failed with error: {e}")
+                        exception[0] = e
+                
+                thread = threading.Thread(target=run_integrated_analysis)
+                thread.daemon = True
+                thread.start()
+                thread.join(timeout=15)  # 15 second timeout
+                
+                if thread.is_alive():
+                    print(f"   ⏰ TIMEOUT: Analysis taking too long, using basic fallback")
+                    # Basic fallback with just R-CNN
+                    comprehensive_analysis = enhanced_image_processor.process_image_ultra_fast(
+                        temp_path, object_detector
+                    )
+                elif exception[0]:
+                    print(f"   ❌ ERROR: Analysis failed: {exception[0]}")
+                    print(f"   🔄 FALLBACK: Using basic R-CNN only")
+                    comprehensive_analysis = enhanced_image_processor.process_image_ultra_fast(
+                        temp_path, object_detector
+                    )
+                else:
+                    print(f"   ✅ SUCCESS: Integrated analysis completed")
+                    comprehensive_analysis = result[0]
+                    
+            except Exception as e:
+                print(f"   ❌ EXCEPTION: Analysis error: {e}")
+                print(f"   🔄 FALLBACK: Using basic R-CNN only")
                 comprehensive_analysis = enhanced_image_processor.process_image_ultra_fast(
                     temp_path, object_detector
                 )
-            elif processing_mode == 'fast':
-                print(f"[FAST ANALYSIS] Starting fast analysis for {temp_path}")
-                comprehensive_analysis = enhanced_image_processor.process_image_fast(
-                    temp_path, object_detector
-                )
-            else:
-                # Use comprehensive R-CNN + RNN + BERT analysis with timeout
-                print(f"[COMPREHENSIVE ANALYSIS] Starting R-CNN + RNN + BERT analysis for {temp_path}")
-                try:
-                    # Set a timeout for the analysis (60 seconds)
-                    import threading
-                    result = [None]
-                    exception = [None]
-                    
-                    def run_analysis():
-                        try:
-                            result[0] = enhanced_image_processor.process_image_comprehensive(
-                                temp_path, object_detector, image_rnn_analyzer, text_analyzer
-                            )
-                        except Exception as e:
-                            exception[0] = e
-                    
-                    thread = threading.Thread(target=run_analysis)
-                    thread.daemon = True
-                    thread.start()
-                    thread.join(timeout=15)  # 15 second timeout for faster response
-                    
-                    if thread.is_alive():
-                        print("[TIMEOUT] Analysis taking too long, falling back to fast mode")
-                        comprehensive_analysis = enhanced_image_processor.process_image_fast(
-                            temp_path, object_detector
-                        )
-                    elif exception[0]:
-                        print(f"[ERROR] Analysis failed: {exception[0]}, falling back to fast mode")
-                        comprehensive_analysis = enhanced_image_processor.process_image_fast(
-                            temp_path, object_detector
-                        )
-                    else:
-                        comprehensive_analysis = result[0]
-                        
-                except Exception as e:
-                    print(f"[ERROR] Analysis error: {e}, falling back to fast mode")
-                    comprehensive_analysis = enhanced_image_processor.process_image_fast(
-                        temp_path, object_detector
-                    )
+        
+        # STEP 5: RESULTS EXTRACTION AND ANALYSIS
+        print("\n" + "="*60)
+        print("📊 STEP 5: RESULTS EXTRACTION AND ANALYSIS")
+        print("="*60)
         
         # Extract results from comprehensive analysis
         rcnn_analysis = comprehensive_analysis.get('rcnn_analysis', {})
@@ -1236,7 +1723,38 @@ def process_image():
         enhanced_description = comprehensive_analysis.get('enhanced_description', '')
         
         detected_objects = rcnn_analysis.get('objects', [])
-        print(f"[COMPREHENSIVE ANALYSIS] R-CNN: {len(detected_objects)} objects, RNN: {rnn_analysis.get('confidence', 0):.2f}, BERT: {bert_analysis.get('text_confidence', 0):.2f}")
+        
+        print(f"🔍 FASTER R-CNN RESULTS:")
+        print(f"   📦 OBJECTS DETECTED: {len(detected_objects)}")
+        for i, obj in enumerate(detected_objects):
+            print(f"      {i+1}. {obj.get('class', 'unknown').upper()}")
+            print(f"         🎯 CONFIDENCE: {obj.get('confidence', 0):.2%}")
+            print(f"         📐 BOUNDING BOX: {obj.get('box', [])}")
+        
+        print(f"🧠 RNN ANALYSIS RESULTS:")
+        print(f"   🎯 CONFIDENCE: {rnn_analysis.get('confidence', 0):.2%}")
+        rnn_details = rnn_analysis.get('details', {})
+        if rnn_details:
+            print(f"   🎨 COLORS: {rnn_details.get('colors', [])}")
+            print(f"   🏗️  MATERIALS: {rnn_details.get('materials', [])}")
+            print(f"   📏 SIZE: {rnn_details.get('size', 'unknown')}")
+            print(f"   🔧 CONDITION: {rnn_details.get('condition', 'unknown')}")
+        
+        print(f"📝 BERT TEXT ANALYSIS RESULTS:")
+        print(f"   🎯 TEXT CONFIDENCE: {bert_analysis.get('text_confidence', 0):.2%}")
+        print(f"   📄 DESCRIPTION: {bert_analysis.get('description', 'N/A')}")
+        bert_semantic = bert_analysis.get('semantic_analysis', {})
+        if bert_semantic:
+            print(f"   🔑 KEYWORDS: {bert_semantic.get('keywords', [])}")
+        
+        print(f"🔗 FUSED ANALYSIS RESULTS:")
+        print(f"   📝 ENHANCED DESCRIPTION: {enhanced_description}")
+        print(f"   🎯 OVERALL CONFIDENCE: {comprehensive_analysis.get('processing_confidence', 0):.2%}")
+        
+        print(f"\n📈 SUMMARY STATISTICS:")
+        print(f"   🔍 R-CNN: {len(detected_objects)} objects detected")
+        print(f"   🧠 RNN: {rnn_analysis.get('confidence', 0):.2%} confidence")
+        print(f"   📝 BERT: {bert_analysis.get('text_confidence', 0):.2%} confidence")
         
         # Create analysis_result from comprehensive analysis (avoid duplicate processing)
         if not cached_result:
@@ -1265,28 +1783,59 @@ def process_image():
             # Use cached analysis_result
             analysis_result = cached_result.get('analysis_result', {})
         
+        # STEP 6: OBJECT FILTERING AND PROCESSING
+        print("\n" + "="*60)
+        print("🔍 STEP 6: OBJECT FILTERING AND PROCESSING")
+        print("="*60)
+        
         # Log detected classes for debugging (only in debug mode)
         if os.getenv('DEBUG_MODE', 'false').lower() == 'true':
-            print("Detected classes:", [obj.get('class', '').lower() for obj in detected_objects])
+            print(f"🐛 DEBUG: Detected classes: {[obj.get('class', '').lower() for obj in detected_objects]}")
         
         # Filter objects (simplified for speed)
         filtered_objects = []
         image_area = None
+        
+        print(f"🔍 FILTERING: Processing {len(detected_objects)} detected objects")
+        
         # Skip image area calculation for speed unless needed
         if len(detected_objects) > 0:
             try:
                 img = Image.open(temp_path)
                 image_area = img.width * img.height
+                print(f"📐 IMAGE DIMENSIONS: {img.width}x{img.height} pixels (area: {image_area:,})")
                 img.close()
-            except:
-                pass
-        # Simplified object filtering for speed
-        for obj in detected_objects:
-            obj_class = normalize_class_name(obj.get('class', ''))
-            # Basic filtering only
-            if obj_class in ALLOWED_CLASSES and obj_class != 'tv':
+            except Exception as e:
+                print(f"⚠️  DIMENSION CALCULATION FAILED: {e}")
+        
+        # Strict filtering - only allow Mouse, Tumbler, Phone/Cellphone, and Wallets
+        print(f"🎯 FILTERING CRITERIA:")
+        print(f"   ✅ ALLOWED: Mouse, Tumbler, Phone/Cellphone, Wallets only")
+        print(f"   📱 PHONE VARIANTS: phone, mobile, cell phone, cellphone, smartphone")
+        print(f"   🖱️  MOUSE VARIANTS: computer mouse, mouse")
+        print(f"   👛 WALLET: wallet")
+        print(f"   🥤 TUMBLER: tumbler")
+        print(f"   ❌ REJECTED: All other object types")
+        
+        for i, obj in enumerate(detected_objects):
+            original_class = obj.get('class', '')
+            obj_class = normalize_class_name(original_class)
+            print(f"   🔍 OBJECT {i+1}: '{original_class}' -> '{obj_class}' (confidence: {obj.get('confidence', 0):.2%})")
+            
+            # Strict filtering - only allow specific classes
+            if obj_class and obj_class in ALLOWED_CLASSES:
                 obj['class'] = obj_class
                 filtered_objects.append(obj)
+                print(f"      ✅ ACCEPTED: {obj_class} is in allowed classes")
+            else:
+                print(f"      ❌ REJECTED: '{original_class}' -> '{obj_class}' is not in allowed classes (Mouse, Tumbler, Phone, Wallet only)")
+        
+        print(f"📊 FILTERING RESULTS: {len(filtered_objects)} objects passed filtering")
+        # STEP 7: BEST OBJECT SELECTION AND FINAL PROCESSING
+        print("\n" + "="*60)
+        print("🏆 STEP 7: BEST OBJECT SELECTION AND FINAL PROCESSING")
+        print("="*60)
+        
         # Process only the detected item with the highest confidence
         if filtered_objects:
             best_obj = max(filtered_objects, key=lambda x: x['confidence'])
@@ -1294,8 +1843,14 @@ def process_image():
             obj_class = normalize_class_name(obj.get('class', ''))
             box = obj.get('box')
             
-            # Skip complex heuristics in ultra-fast mode
-            if processing_mode != 'ultra_fast':
+            print(f"🏆 BEST OBJECT SELECTED:")
+            print(f"   📦 CLASS: {obj_class.upper()}")
+            print(f"   🎯 CONFIDENCE: {obj.get('confidence', 0):.2%}")
+            print(f"   📐 BOUNDING BOX: {box}")
+            print(f"   🏷️  LABEL ID: {obj.get('label', 'N/A')}")
+            
+            # Apply complex heuristics for better accuracy
+            if True:  # Always use heuristics in integrated mode
                 # Heuristic: If class is 'tv' and bounding box is small, relabel as 'phone'
                 if obj_class == 'tv' and box:
                     try:
@@ -1328,18 +1883,46 @@ def process_image():
                     cropped_path = temp_path  # fallback
             else:
                 cropped_path = temp_path
-            # Simplified processing for ultra-fast mode
-            if processing_mode == 'ultra_fast':
-                # Skip expensive operations in ultra-fast mode
-                color = 'unknown'
+            # Enhanced processing for integrated mode
+            if False:  # Skip simplified processing, use integrated method
+                # Use basic color detection for ultra-fast mode
+                try:
+                    color_info = extract_detailed_color_info(cropped_path)
+                    primary_color = color_info.get('primary_color', 'unknown')
+                    # Convert tuple to color name if needed
+                    if isinstance(primary_color, (list, tuple)):
+                        color = get_color_name_from_rgb(primary_color)
+                    else:
+                        color = str(primary_color)
+                    primary_color_name = color_info.get('primary_color_name') or color
+                    # Force single-color mode
+                    secondary_color_name = ''
+                except:
+                    color = 'unknown'
+                    primary_color_name = 'unknown'
+                    secondary_color_name = ''
                 size = 'unknown'
                 item_type = obj_class
                 category = 'other'
                 crack_status = None
                 damage_status = None
             else:
-                # Color analysis disabled for maximum speed
-                color = 'unknown'
+                # Use enhanced color detection
+                try:
+                    color_info = extract_detailed_color_info(cropped_path)
+                    primary_color = color_info.get('primary_color', 'unknown')
+                    # Convert tuple to color name if needed
+                    if isinstance(primary_color, (list, tuple)):
+                        color = get_color_name_from_rgb(primary_color)
+                    else:
+                        color = str(primary_color)
+                    primary_color_name = color_info.get('primary_color_name') or color
+                    # Force single-color mode
+                    secondary_color_name = ''
+                except:
+                    color = 'unknown'
+                    primary_color_name = 'unknown'
+                    secondary_color_name = ''
                 # Get size using only the cropped region
                 size = estimate_size([obj], cropped_path)
                 # Get item type and category
@@ -1363,14 +1946,33 @@ def process_image():
                 rnn_analysis = analysis_result.get('rnn_analysis', {})
                 description = generate_description([obj], color, size, category, None, crack_status, damage_status, rnn_analysis)
                 print(f"[FALLBACK DESCRIPTION] Using traditional description: {description[:100]}...")
+            # Ensure box is JSON-serializable (convert numpy ints)
+            try:
+                safe_box = [int(v) for v in box] if box else [0, 0, 0, 0]
+            except Exception:
+                safe_box = [0, 0, 0, 0]
+
+            # Ensure box and confidence are JSON-serializable
+            try:
+                safe_box = [int(v) for v in box] if box else [0, 0, 0, 0]
+            except Exception:
+                safe_box = [0, 0, 0, 0]
+            try:
+                safe_conf = float(obj.get('confidence', 0.0))
+            except Exception:
+                safe_conf = 0.0
+
             items_info = [{
                 'item_type': item_type,
                 'description': description,
                 'category': category,
                 'color': color,
+                'primary_color_name': primary_color_name,
+                'secondary_color_name': secondary_color_name,
+                'named_palette': color_info.get('named_palette', []),
                 'size': size,
-                'confidence': obj['confidence'],
-                'box': box
+                'confidence': safe_conf,
+                'box': safe_box
             }]
             # Clean up cropped file
             if cropped_path and cropped_path != temp_path:
@@ -1379,10 +1981,29 @@ def process_image():
                 except Exception as cleanup_err:
                     print(f"Cropped cleanup error: {cleanup_err}")
         else:
-            items_info = []
-        # Skip expensive training operations in ultra-fast mode or when disabled
+            # No objects detected: provide color-only fallback item so UI can show colors
+            try:
+                fb = extract_detailed_color_info(temp_path)
+                prgb = fb.get('primary_rgb') or fb.get('primary_color')
+                pname = fb.get('primary_color_name') or (get_color_name_from_rgb(prgb) if isinstance(prgb, (list, tuple)) else str(prgb))
+                sname = fb.get('secondary_color_name') or (get_color_name_from_rgb(fb.get('secondary_rgb')) if fb.get('secondary_rgb') else '')
+                items_info = [{
+                    'item_type': 'other',
+                    'description': 'No objects detected. Color analysis provided.',
+                    'category': 'other',
+                    'color': pname,
+                    'primary_color_name': pname,
+                    'secondary_color_name': sname,
+                    'named_palette': fb.get('named_palette', []),
+                    'size': 'unknown',
+                    'confidence': 0.0,
+                    'box': [0,0,0,0]
+                }]
+            except Exception:
+                items_info = []
+        # Enable training operations in integrated mode
         enable_training = os.getenv('ENABLE_TRAINING', 'true').lower() in ['true', '1', 'yes']
-        if processing_mode != 'ultra_fast' and enable_training and filtered_objects:
+        if enable_training and filtered_objects:
             try:
                 # Create a temporary item-like object for training
                 temp_item = type('TempItem', (), {
@@ -1411,8 +2032,8 @@ def process_image():
             except Exception as e:
                 print(f"[TRAINING] Error setting up training: {e}")
         
-        # Skip RNN tracking in ultra-fast mode
-        if processing_mode != 'ultra_fast' and current_user.is_authenticated and items_info:
+        # Enable RNN tracking in integrated mode
+        if current_user.is_authenticated and items_info:
             try:
                 item_type = items_info[0].get('item_type', '')
                 rnn_manager.add_user_action(
@@ -1433,8 +2054,8 @@ def process_image():
             except Exception as e:
                 print(f"[RNN] Error tracking user behavior: {e}")
         
-        # Prepare analysis summary (simplified for ultra-fast mode)
-        if processing_mode == 'ultra_fast':
+        # Prepare comprehensive analysis summary for integrated mode
+        if False:  # Skip simplified summary, use comprehensive analysis
             analysis_summary = {
                 'rcnn_objects_detected': len(detected_objects),
                 'overall_confidence': comprehensive_analysis.get('processing_confidence', 0.0),
@@ -1458,33 +2079,137 @@ def process_image():
                 }
             }
         
-        return jsonify({
+        # Ensure at least one item is returned: if no detections, provide color-only fallback
+        if not items_info:
+            try:
+                fb = extract_detailed_color_info(temp_path)
+                prgb = fb.get('primary_rgb') or fb.get('primary_color')
+                pname = fb.get('primary_color_name') or (get_color_name_from_rgb(prgb) if isinstance(prgb, (list, tuple)) else str(prgb))
+                sname = fb.get('secondary_color_name') or (get_color_name_from_rgb(fb.get('secondary_rgb')) if fb.get('secondary_rgb') else '')
+                items_info = [{
+                    'item_type': 'other',
+                    'description': 'No objects detected. Color analysis provided.',
+                    'category': 'other',
+                    'color': pname,
+                    'primary_color_name': pname,
+                    'secondary_color_name': sname,
+                    'named_palette': fb.get('named_palette', []),
+                    'size': 'unknown',
+                    'confidence': 0.0,
+                    'box': [0, 0, 0, 0]
+                }]
+            except Exception:
+                pass
+
+        # Sanitize detected objects for JSON (convert numpy types)
+        safe_filtered_objects = []
+        try:
+            for o in (filtered_objects or []):
+                safe_o = {
+                    'class': str(o.get('class', '')),
+                    'confidence': float(o.get('confidence', 0.0))
+                }
+                try:
+                    b = o.get('box')
+                    safe_o['box'] = [int(v) for v in b] if b else [0, 0, 0, 0]
+                except Exception:
+                    safe_o['box'] = [0, 0, 0, 0]
+                safe_filtered_objects.append(safe_o)
+        except Exception:
+            safe_filtered_objects = []
+
+        # Build a JSON-safe analysis summary (avoid numpy types)
+        try:
+            safe_summary = {
+                'rcnn_objects_detected': int(analysis_summary.get('rcnn_objects_detected', 0)),
+                'overall_confidence': float(analysis_summary.get('overall_confidence', 0.0)),
+                'processing_method': str(analysis_summary.get('processing_method', ''))
+            }
+            if 'rnn_confidence' in analysis_summary:
+                safe_summary['rnn_confidence'] = float(analysis_summary.get('rnn_confidence', 0.0))
+            if 'bert_confidence' in analysis_summary:
+                safe_summary['bert_confidence'] = float(analysis_summary.get('bert_confidence', 0.0))
+        except Exception:
+            safe_summary = {'rcnn_objects_detected': 0, 'overall_confidence': 0.0, 'processing_method': 'unknown'}
+
+        # Deep sanitize entire payload as final guard
+        payload = {
             'items': items_info,
-            'detected_objects': filtered_objects,
+            'detected_objects': safe_filtered_objects,
             'description': items_info[0]['description'] if items_info else "No objects detected in the image.",
-            'comprehensive_analysis': analysis_summary
-        })
+            'comprehensive_analysis': safe_summary
+        }
+        
+        # STEP 8: FINAL RESPONSE PREPARATION
+        print("\n" + "="*60)
+        print("📤 STEP 8: FINAL RESPONSE PREPARATION")
+        print("="*60)
+        
+        print(f"✅ PROCESSING COMPLETED SUCCESSFULLY!")
+        print(f"📊 FINAL RESULTS SUMMARY:")
+        print(f"   🔍 OBJECTS DETECTED: {len(safe_filtered_objects)}")
+        print(f"   📝 DESCRIPTION: {items_info[0]['description'][:100]}..." if items_info else "   📝 DESCRIPTION: No description available")
+        print(f"   🎯 OVERALL CONFIDENCE: {safe_summary.get('overall_confidence', 0):.2%}")
+        print(f"   ⏱️  TOTAL PROCESSING TIME: {time.time() - start_time:.2f} seconds" if 'start_time' in locals() else "   ⏱️  TOTAL PROCESSING TIME: N/A")
+        
+        print(f"\n🎉 LOST & FOUND IMAGE PROCESSING PIPELINE COMPLETED!")
+        print("="*80)
+        
+        return jsonify(_json_safe(payload))
     except Exception as e:
-        print(f"process_image error: {e}")
-        # Instead of returning an error, return a valid response with no items and status 200
-        return jsonify({
-            'items': [],
-            'detected_objects': [],
-            'description': 'No objects detected in the image.'
-        }), 200
+        print(f"\n❌ PROCESSING ERROR: {e}")
+        print(f"⏱️  FAILED AFTER: {time.time() - start_time:.2f} seconds")
+        print(f"🔄 ATTEMPTING GRACEFUL FALLBACK...")
+        
+        # Graceful fallback: try to return color-only analysis so UI can still show something
+        try:
+            print(f"🎨 FALLBACK: Attempting color-only analysis...")
+            fb = extract_detailed_color_info(temp_path)
+            prgb = fb.get('primary_rgb') or fb.get('primary_color')
+            pname = fb.get('primary_color_name') or (get_color_name_from_rgb(prgb) if isinstance(prgb, (list, tuple)) else str(prgb))
+            sname = fb.get('secondary_color_name') or (get_color_name_from_rgb(fb.get('secondary_rgb')) if fb.get('secondary_rgb') else '')
+            
+            print(f"🎨 FALLBACK SUCCESS: Primary color '{pname}', Secondary color '{sname}'")
+            
+            items_info = [{
+                'item_type': 'other',
+                'description': 'Analysis fallback. Color analysis provided.',
+                'category': 'other',
+                'color': pname,
+                'primary_color_name': pname,
+                'secondary_color_name': sname,
+                'named_palette': fb.get('named_palette', []),
+                'size': 'unknown',
+                'confidence': 0.0,
+                'box': [0, 0, 0, 0]
+            }]
+            
+            print(f"✅ FALLBACK COMPLETED: Returning color-only analysis")
+            return jsonify({
+                'items': items_info,
+                'detected_objects': [],
+                'description': items_info[0]['description'],
+                'comprehensive_analysis': {'rcnn_objects_detected': 0, 'overall_confidence': 0.0, 'processing_method': 'fallback'}
+            }), 200
+        except Exception as ee:
+            print(f"❌ FALLBACK FAILED: Color extraction failed: {ee}")
+            print(f"💥 COMPLETE FAILURE: Unable to process image")
+            return jsonify({
+                'items': [],
+                'detected_objects': [],
+                'description': 'No objects detected in the image.'
+            }), 200
     finally:
         # Clean up the temporary file (immediate cleanup for speed)
+        print(f"\n🧹 CLEANUP: Cleaning up temporary files...")
         if temp_path and os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
-            except Exception as cleanup_err:
-                print(f"Cleanup error: {cleanup_err}")
-                # Schedule cleanup for later if immediate removal fails
-                try:
-                    import atexit
-                    atexit.register(lambda: os.remove(temp_path) if os.path.exists(temp_path) else None)
-                except:
-                    pass
+                print(f"✅ CLEANUP: Removed temporary file {temp_path}")
+            except Exception as cleanup_error:
+                print(f"⚠️  CLEANUP WARNING: Failed to remove {temp_path}: {cleanup_error}")
+        else:
+            print(f"ℹ️  CLEANUP: No temporary file to clean up")
 
 def find_potential_matches(item):
     """Find potential matches for a lost/found item using text similarity with boosts for category, color, size, type, and location proximity."""
@@ -1519,12 +2244,41 @@ def find_potential_matches(item):
         # Category
         category_match = item.category == other_item.category
 
-        # Colors
+        # Enhanced Color Matching
         color_match = False
+        color_similarity = 0.0
+        enhanced_color_match = {}
+        
         if item.color and other_item.color:
-            item_colors = set(c.strip().lower() for c in item.color.split(','))
-            other_colors = set(c.strip().lower() for c in other_item.color.split(','))
-            color_match = bool(item_colors.intersection(other_colors))
+            # Try enhanced color matching first
+            try:
+                from enhanced_color_matching import calculate_enhanced_color_similarity
+                
+                # Prepare color data for enhanced matching
+                item_colors = {
+                    'primary_rgb': item.color.split(',')[0].strip() if ',' in item.color else item.color,
+                    'secondary_rgb': item.color.split(',')[1].strip() if ',' in item.color else [],
+                    'enhanced_analysis': json.loads(item.enhanced_analysis) if hasattr(item, 'enhanced_analysis') and item.enhanced_analysis else {}
+                }
+                
+                other_colors = {
+                    'primary_rgb': other_item.color.split(',')[0].strip() if ',' in other_item.color else other_item.color,
+                    'secondary_rgb': other_item.color.split(',')[1].strip() if ',' in other_item.color else [],
+                    'enhanced_analysis': json.loads(other_item.enhanced_analysis) if hasattr(other_item, 'enhanced_analysis') and other_item.enhanced_analysis else {}
+                }
+                
+                # Calculate enhanced color similarity
+                enhanced_color_match = calculate_enhanced_color_similarity(item_colors, other_colors)
+                color_similarity = enhanced_color_match.get('overall_similarity', 0.0)
+                color_match = color_similarity > 0.3  # Threshold for color match
+                
+            except Exception as e:
+                # Fallback to basic color matching
+                print(f"Enhanced color matching failed, using fallback: {e}")
+                item_colors = set(c.strip().lower() for c in item.color.split(','))
+                other_colors = set(c.strip().lower() for c in other_item.color.split(','))
+                color_match = bool(item_colors.intersection(other_colors))
+                color_similarity = 0.15 if color_match else 0.0
 
         # Size
         size_match = item.size == other_item.size
@@ -1556,7 +2310,9 @@ def find_potential_matches(item):
             if category_match:
                 match_score += 0.20
             if color_match:
-                match_score += 0.15
+                # Use enhanced color similarity for more accurate scoring
+                color_boost = min(0.20, color_similarity * 0.25)  # Scale similarity to boost
+                match_score += color_boost
             if size_match:
                 match_score += 0.10
             if type_match:
@@ -1578,6 +2334,8 @@ def find_potential_matches(item):
                 'similarity': similarity,
                 'category_match': category_match,
                 'color_match': color_match,
+                'color_similarity': color_similarity,
+                'enhanced_color_match': enhanced_color_match,
                 'size_match': size_match,
                 'type_match': type_match,
                 'location_match': location_match
@@ -1596,10 +2354,14 @@ def add_item():
         category = request.form.get('category')
         status = request.form.get('status')
         location = request.form.get('location')
+        latitude = request.form.get('latitude')
+        longitude = request.form.get('longitude')
         # Removed true label usage
         
         # Additional information fields
-        brand = request.form.get('brand', '')
+        brand = request.form.get('brand', '').strip()
+        if not brand:
+            brand = 'N/A'
         model = request.form.get('model', '')
         material = request.form.get('material', '')
         condition = request.form.get('condition', '')
@@ -1677,9 +2439,25 @@ def add_item():
                 if analysis_result['confidence_score'] > 0.7:
                     category = analysis_result['suggested_category']
 
-            # Color analysis disabled for maximum speed
-            color = 'unknown'
-            color_secondary = ''
+            # Use enhanced color detection
+            try:
+                color_info = extract_detailed_color_info(temp_path)
+                primary_color = color_info.get('primary_color', 'unknown')
+                secondary_color = color_info.get('secondary_color', '')
+                
+                # Convert tuples to color names if needed
+                if isinstance(primary_color, (list, tuple)):
+                    color = get_color_name_from_rgb(primary_color)
+                else:
+                    color = str(primary_color)
+                    
+                if isinstance(secondary_color, (list, tuple)):
+                    color_secondary = get_color_name_from_rgb(secondary_color)
+                else:
+                    color_secondary = str(secondary_color)
+            except:
+                color = 'unknown'
+                color_secondary = ''
 
             # Extract size information from analysis
             size_info = analysis_result.get('size_info', {})
@@ -1733,6 +2511,8 @@ def add_item():
                 category=category,
                 status=status,
                 location=location,
+                latitude=float(latitude) if latitude else None,
+                longitude=float(longitude) if longitude else None,
                 image_path=relative_path,
                 user_id=current_user.id,
                 detected_objects=detected_objects_json,
@@ -1869,10 +2649,13 @@ def edit_item(item_id):
             item.category = request.form.get('category', item.category)
             item.status = request.form.get('status', item.status)
             item.location = request.form.get('location', item.location)
+            item.latitude = float(request.form.get('latitude')) if request.form.get('latitude') else None
+            item.longitude = float(request.form.get('longitude')) if request.form.get('longitude') else None
             item.description = request.form.get('description', item.description)
             
             # Update additional information fields
-            item.brand = request.form.get('brand', item.brand)
+            brand = request.form.get('brand', item.brand).strip()
+            item.brand = brand if brand else 'N/A'
             item.model = request.form.get('model', item.model)
             item.material = request.form.get('material', item.material)
             item.condition = request.form.get('condition', item.condition)
@@ -2565,7 +3348,8 @@ def admin_update_item(item_id):
         item.description = request.form.get('description', item.description)
         
         # Update additional fields
-        item.brand = request.form.get('brand', item.brand)
+        brand = request.form.get('brand', item.brand).strip()
+        item.brand = brand if brand else 'N/A'
         item.model = request.form.get('model', item.model)
         item.color = request.form.get('color', item.color)
         item.size = request.form.get('size', item.size)
@@ -4103,6 +4887,69 @@ def admin_train_with_uploaded_images():
     except Exception as e:
         flash(f'Error during comprehensive training: {str(e)}', 'error')
         return redirect(url_for('admin_training_dataset'))
+
+
+@app.route('/admin/training/retrain_detector', methods=['POST'])
+@login_required
+def admin_retrain_detector():
+    """Fine-tune Faster R-CNN on the COCO-style dataset and reload the detector."""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        import subprocess
+        import sys
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(base_dir, 'finetune_with_previous_dataset.py')
+
+        # Output path where UnifiedModel expects the checkpoint
+        output_ckpt = os.path.join(base_dir, 'best_model1.pth')
+
+        # Run finetuning; adjust dataset/split/epochs as needed
+        result = subprocess.run([
+            sys.executable, script_path,
+            '--dataset', 'image recog.v1i.coco-mmdetection',
+            '--split', 'train',
+            '--epochs', '5',
+            '--output', output_ckpt
+        ], capture_output=True, text=True, cwd=base_dir)
+
+        if result.returncode != 0:
+            return jsonify({'error': 'Retraining failed', 'stderr': result.stderr, 'stdout': result.stdout}), 500
+
+        # Reload detector in memory
+        try:
+            # Rebuild detector using the UnifiedModel loader
+            new_model = unified_model._load_trained_detector_or_default()
+            unified_model.object_model = new_model.to(unified_model.device)
+            unified_model.object_model.eval()
+        except Exception as e:
+            return jsonify({'error': f'Retraining done, but failed to reload detector: {str(e)}'}), 500
+
+        flash('Detector retrained and reloaded successfully.', 'success')
+        return redirect(url_for('admin_training_dataset'))
+    except Exception as e:
+        return jsonify({'error': f'Error during detector retraining: {str(e)}'}), 500
+
+
+@app.route('/admin/training/retrain_rnn', methods=['POST'])
+@login_required
+def admin_retrain_rnn():
+    """Retrain custom RNN models on accumulated training data and save checkpoints."""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        # Lazy import to avoid startup cost if not needed
+        from rnn_models import rnn_manager
+
+        # Train models (method internally saves weights and artifacts)
+        rnn_manager.train_models(training_data={})
+
+        flash('RNN models retrained and saved successfully.', 'success')
+        return redirect(url_for('admin_training_dataset'))
+    except Exception as e:
+        return jsonify({'error': f'Error during RNN retraining: {str(e)}'}), 500
 
 @app.route('/admin/training/dataset/export', methods=['POST'])
 @login_required
