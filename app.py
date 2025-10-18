@@ -147,14 +147,31 @@ try:
     object_detector = unified_model  # For backward compatibility
     text_analyzer = TextAnalyzer()  # Uses unified model internally
     model_trainer = ModelTrainer()  # Uses unified model internally
-    sequence_processor = SequenceProcessor()  # For sequence processing
+    sequence_processor = SequenceProcessor()
 except ImportError as e:
-    # ML dependencies are required - fail fast if not available
-    print(f"ERROR: Required ML dependencies not available: {e}")
-    print("Please install required packages: pip install -r requirements.txt")
-    raise e
-
-sequence_processor = SequenceProcessor()
+    print(f"Warning: Could not import ML models: {e}")
+    print("Using fallback models...")
+    try:
+        from ml_models_fallback import UnifiedModel, ObjectDetector, TextAnalyzer, ModelTrainer, SequenceProcessor
+        unified_model = UnifiedModel()
+        object_detector = unified_model
+        text_analyzer = TextAnalyzer()
+        model_trainer = ModelTrainer()
+        sequence_processor = SequenceProcessor()
+        # Set fallback flags
+        rnn_manager = None
+        image_rnn_analyzer = None
+        enhanced_image_processor = None
+    except ImportError as fallback_e:
+        print(f"Error: Could not import fallback models either: {fallback_e}")
+        unified_model = None
+        object_detector = None
+        text_analyzer = None
+        model_trainer = None
+        sequence_processor = None
+        rnn_manager = None
+        image_rnn_analyzer = None
+        enhanced_image_processor = None
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
