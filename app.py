@@ -48,11 +48,39 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 # Update database URI to use SQLite
 # For PythonAnywhere, use absolute path to avoid permission issues
 if os.environ.get('PYTHONANYWHERE_DOMAIN'):
-    # Running on PythonAnywhere
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////home/smartlostandfound/mysite/lostfound.db'
+    # Running on PythonAnywhere - try multiple paths
+    possible_paths = [
+        '/home/smartlostandfound/lostfound.db',  # Home directory
+        '/home/smartlostandfound/Smart-Lost-and-Found/lostfound.db',  # Project directory
+        '/tmp/lostfound.db'  # Temp directory as fallback
+    ]
+    
+    db_path = None
+    for path in possible_paths:
+        try:
+            # Try to create the directory if it doesn't exist
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            # Test if we can write to this location
+            test_file = path + '.test'
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            db_path = path
+            break
+        except (OSError, PermissionError):
+            continue
+    
+    if db_path:
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+        print(f"Using database path: {db_path}")
+    else:
+        # Fallback to in-memory database
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        print("Warning: Using in-memory database due to storage issues")
 else:
     # Running locally
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///lostfound.db'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Fix uploads directory path

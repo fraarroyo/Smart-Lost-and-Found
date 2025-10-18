@@ -1,0 +1,26 @@
+# Ultra-lightweight requirements for PythonAnywhere
+# Minimal dependencies for basic functionality
+
+# Core Flask dependencies (essential)
+Flask==2.3.3
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.2
+Flask-Migrate==4.0.5
+Flask-Mail==0.9.1
+Werkzeug==2.3.7
+
+# Basic image processing (lightweight)
+Pillow==10.4.0
+
+# Minimal scientific computing
+numpy==1.24.3
+
+# Utilities (essential only)
+python-dotenv==1.0.0
+itsdangerous==2.1.2
+gunicorn==21.2.0
+
+# Optional: Add these only if you have space
+# opencv-python-headless==4.10.0.84
+# scikit-learn==1.3.2
+# scipy==1.11.4
