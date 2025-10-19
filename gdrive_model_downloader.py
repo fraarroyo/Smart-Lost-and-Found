@@ -18,8 +18,8 @@ class GoogleDriveModelDownloader:
         self.model_dir.mkdir(exist_ok=True)
         
         # Google Drive file ID from the URL
-        self.gdrive_file_id = "1rUHF1c3qUPMqa36LFb4CAr6IcqO2yoPc"
-        self.local_model_path = self.model_dir / "best_model1.pth"
+        self.gdrive_file_id = "1UPz_r23OqYrPWh76Tx0Vh4BqnyaVWXJR"
+        self.local_model_path = self.model_dir / "best_model9.pth"
         
     def download_model(self):
         """Download the model from Google Drive"""
@@ -104,6 +104,11 @@ class GoogleDriveModelDownloader:
         if alt_model_path.exists():
             return str(alt_model_path)
         
+        # Check for the new model9
+        model9_path = Path("best_model9.pth")
+        if model9_path.exists():
+            return str(model9_path)
+        
         self.logger.warning("No model file found locally or on Google Drive")
         return None
     
@@ -112,7 +117,8 @@ class GoogleDriveModelDownloader:
         return (
             self.local_model_path.exists() or
             Path("best_model1.pth").exists() or
-            Path("best_model1.2.pth").exists()
+            Path("best_model1.2.pth").exists() or
+            Path("best_model9.pth").exists()
         )
 
 def get_model_path():
