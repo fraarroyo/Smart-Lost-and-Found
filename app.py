@@ -262,10 +262,11 @@ ITEM_CATEGORY_MAPPINGS = {
     'mobile': 'electronics',
     'mouse': 'electronics',
     'tumbler': 'others',
-    'wallet': 'accessories'
+    'wallet': 'accessories',
+    'item': 'other'  # Generic item category
 }
 
-# Allowed classes - only Mouse, Tumbler, Phone/Cellphone, and Wallets
+# Allowed classes - Mouse, Tumbler, Phone/Cellphone, Wallets, and generic items
 ALLOWED_CLASSES = {
     # Phone/Cellphone variants
     "phone", "mobile", "cell phone", "cellphone", "smartphone",
@@ -274,12 +275,14 @@ ALLOWED_CLASSES = {
     # Wallet
     "wallet",
     # Tumbler
-    "tumbler"
+    "tumbler",
+    # Generic item (from custom model)
+    "item"
 }
 
 def normalize_class_name(name: str) -> str:
     """Normalize detector class names to canonical forms for allowed classes only.
-    Only maps to: phone, mouse, wallet, tumbler
+    Maps to: phone, mouse, wallet, tumbler, item
     """
     if not name:
         return ''
@@ -295,17 +298,33 @@ def normalize_class_name(name: str) -> str:
         'smartphone': 'phone',
         'mobile': 'phone',
         
-        # Mouse variants -> 'mouse'
+        # Mouse variants -> 'mouse' (including gaming mice)
         'computer mouse': 'mouse',
+        'gaming mouse': 'mouse',
+        'optical mouse': 'mouse',
+        'wireless mouse': 'mouse',
+        'usb mouse': 'mouse',
         
         # Wallet -> 'wallet'
         'wallet': 'wallet',
+        'purse': 'wallet',
+        'billfold': 'wallet',
         
-        # Tumbler -> 'tumbler'
+        # Tumbler -> 'tumbler' (including vacuum bottles)
         'tumbler': 'tumbler',
         'cup': 'tumbler',
         'mug': 'tumbler',
         'bottle': 'tumbler',
+        'vacuum bottle': 'tumbler',
+        'insulated bottle': 'tumbler',
+        'travel mug': 'tumbler',
+        
+        # Generic item classes
+        'item': 'item',
+        'lost_item': 'item',
+        'found_item': 'item',
+        'lost item': 'item',
+        'found item': 'item',
     }
     
     normalized = synonyms.get(n, n)
@@ -316,8 +335,65 @@ def normalize_class_name(name: str) -> str:
     else:
         return ''  # Return empty string for non-allowed classes
 
+def validate_object_detection(obj, image_path=None):
+    """Validate object detection results for accuracy and consistency."""
+    try:
+        obj_class = obj.get('class', '').lower()
+        confidence = obj.get('confidence', 0.0)
+        
+        # Basic validation rules
+        if confidence < 0.3:
+            return False, "Low confidence"
+        
+        # Object-specific validation
+        if obj_class in ['bottle', 'tumbler']:
+            # For bottles/tumblers, check if it looks like a container
+            if image_path:
+                try:
+                    from PIL import Image
+                    import numpy as np
+                    image = Image.open(image_path).convert('RGB')
+                    img_array = np.array(image)
+                    
+                    # Check aspect ratio - bottles should be roughly vertical
+                    height, width = img_array.shape[:2]
+                    aspect_ratio = height / width
+                    
+                    # If too wide (aspect ratio < 0.5), might not be a bottle
+                    if aspect_ratio < 0.5:
+                        return False, "Aspect ratio suggests not a bottle/tumbler"
+                        
+                except Exception as e:
+                    print(f"Error in bottle validation: {e}")
+        
+        elif obj_class in ['mouse', 'computer mouse']:
+            # For mice, check if it has typical mouse characteristics
+            if image_path:
+                try:
+                    from PIL import Image
+                    import numpy as np
+                    image = Image.open(image_path).convert('RGB')
+                    img_array = np.array(image)
+                    
+                    # Check for typical mouse shape (roughly rectangular)
+                    height, width = img_array.shape[:2]
+                    aspect_ratio = height / width
+                    
+                    # Mice are typically wider than they are tall
+                    if aspect_ratio > 1.5:  # Too tall for a mouse
+                        return False, "Shape suggests not a computer mouse"
+                        
+                except Exception as e:
+                    print(f"Error in mouse validation: {e}")
+        
+        return True, "Valid"
+        
+    except Exception as e:
+        print(f"Error in object validation: {e}")
+        return True, "Validation skipped"
+
 def classify_item(detected_objects):
-    """Classify multiple items based on detected objects and suggest categories."""
+    """Classify multiple items based on detected objects and suggest categories with validation."""
     if not detected_objects:
         return [("Unknown Item", "other")]
         
@@ -328,6 +404,12 @@ def classify_item(detected_objects):
     items = []
     for obj in sorted_objects:
         if obj['confidence'] < 0.5:
+            continue
+        
+        # Validate the object detection
+        is_valid, reason = validate_object_detection(obj)
+        if not is_valid:
+            print(f"Object validation failed: {reason}")
             continue
             
         item_type = obj['class'].lower()
@@ -393,13 +475,34 @@ def generate_description(detected_objects, color=None, size=None, category=None,
         # Colors from RNN or fallback
         if rnn_details.get('colors'):
             color_str = ', '.join(rnn_details['colors'][:2]).title()
+            print(f"[DESCRIPTION] Using RNN colors: {rnn_details['colors'][:2]}")
             desc_parts.append(color_str)
         elif color:
+            print(f"[DESCRIPTION] Using fallback color: {color}")
             desc_parts.append(color.title())
         
-        # Material from RNN
+        # Material from RNN with validation
         if rnn_details.get('materials') and rnn_details['materials'][0] != 'unknown':
             material_str = rnn_details['materials'][0].replace('_', ' ').title()
+            
+            # Validate material based on object type
+            obj_class = best_obj.get('class', '').lower()
+            if obj_class in ['bottle', 'tumbler']:
+                # For bottles/tumblers, prefer metallic materials
+                if material_str.lower() in ['cardboard', 'paper']:
+                    # Replace inappropriate material with more likely one
+                    material_str = 'Stainless Steel'
+                elif material_str.lower() not in ['stainless steel', 'metal', 'steel', 'aluminum', 'plastic', 'glass']:
+                    # If material is not clearly appropriate, default to stainless steel
+                    material_str = 'Stainless Steel'
+            
+            elif obj_class in ['mouse', 'computer mouse']:
+                # For mice, prefer appropriate materials
+                if material_str.lower() in ['cardboard', 'paper', 'fabric']:
+                    material_str = 'Plastic'
+                elif material_str.lower() not in ['plastic', 'metal', 'rubber']:
+                    material_str = 'Plastic'
+            
             desc_parts.append(material_str)
         
         # Item type
@@ -1124,17 +1227,43 @@ def enhanced_image_analysis(image_path):
         # Basic object detection
         detected_objects = object_detector.detect_objects(image_path)
         
-        # Relabel objects for better categorization
+        # Relabel objects for better categorization with improved accuracy
         for obj in detected_objects:
             cls = obj.get('class', '').lower()
-            if cls == 'suitcase':
-                obj['class'] = 'wallet'
-            if cls == 'bottle':
+            confidence = obj.get('confidence', 0.0)
+            
+            # Handle custom model classes from best_model1.pth
+            if cls in ['mouse', 'Mouse']:
+                obj['class'] = 'mouse'
+            elif cls in ['phone']:
+                obj['class'] = 'phone'
+            elif cls in ['tumbler']:
                 obj['class'] = 'tumbler'
-            if cls == 'clock':
+            elif cls in ['wallet']:
+                obj['class'] = 'wallet'
+            elif cls in ['lost_item', 'found_item', 'item']:
+                # For generic item detections, we need to determine the actual object type
+                # This could be enhanced with additional analysis or user input
+                # For now, we'll use a generic approach based on image analysis
+                obj['class'] = 'item'  # Generic item class
+                continue
+            
+            # More specific mappings with confidence thresholds
+            if cls == 'suitcase' and confidence > 0.6:
+                obj['class'] = 'wallet'
+            elif cls == 'bottle' and confidence > 0.7:
+                # Only map bottle to tumbler if confidence is high and it looks like a tumbler
+                obj['class'] = 'tumbler'
+            elif cls == 'clock' and confidence > 0.6:
                 obj['class'] = 'watch'
-            if cls in ['flash drive', 'thumb drive', 'pen drive']:
+            elif cls in ['flash drive', 'thumb drive', 'pen drive'] and confidence > 0.5:
                 obj['class'] = 'usb'
+            elif cls == 'mouse' and confidence > 0.5:
+                # Ensure computer mice are properly classified
+                obj['class'] = 'mouse'
+            elif cls == 'cell phone' and confidence > 0.5:
+                # Ensure phones are properly classified
+                obj['class'] = 'phone'
         
         # Get checkpoint model analysis
         checkpoint_embedding = None
@@ -1213,6 +1342,20 @@ def enhanced_image_analysis(image_path):
         rnn_analysis = None
         try:
             rnn_analysis = image_rnn_analyzer.analyze_image_details(image_path)
+            
+            # Override RNN color detection with enhanced color detection results
+            if color_info and color_info.get('color_names'):
+                enhanced_colors = color_info.get('color_names', [])
+                print(f"[RNN ANALYSIS] Enhanced colors available: {enhanced_colors}")
+                if enhanced_colors:
+                    # Replace RNN colors with enhanced color detection results
+                    rnn_analysis['details']['colors'] = enhanced_colors[:3]  # Top 3 colors
+                    print(f"[RNN ANALYSIS] Override: Using enhanced colors: {enhanced_colors[:3]}")
+                else:
+                    print(f"[RNN ANALYSIS] No enhanced colors found in color_info")
+            else:
+                print(f"[RNN ANALYSIS] No color_info or color_names available")
+            
             print(f"[RNN ANALYSIS] Detailed analysis completed for {image_path}")
         except Exception as e:
             print(f"[RNN ANALYSIS] Error in RNN analysis: {e}")
@@ -1250,26 +1393,37 @@ def enhanced_image_analysis(image_path):
         }
 
 def extract_detailed_color_info(image_path):
-    """Extract detailed color information from image using ultra-enhanced color detection."""
+    """Extract detailed color information from image using super-enhanced color detection."""
     try:
+        from accurate_color_detection import enhance_existing_color_detection_accurate
+        from super_enhanced_color_detection import enhance_existing_color_detection_super
         from ultra_enhanced_color_detection import enhance_existing_color_detection_ultra
         from advanced_color_detection import enhance_existing_color_detection_advanced
         from enhanced_color_detection import enhance_existing_color_detection
+        from fast_color_detection import enhance_existing_color_detection_fast
         
-        # Try ultra-enhanced color detection first
-        color_analysis = enhance_existing_color_detection_ultra(image_path)
+        # Try accurate color detection first (center-focused, no aggressive enhancement)
+        color_analysis = enhance_existing_color_detection_accurate(image_path)
         
         if color_analysis.get('error') or not color_analysis.get('success'):
-            # Fallback to advanced color detection
-            color_analysis = enhance_existing_color_detection_advanced(image_path)
+            # Fallback to ultra-enhanced color detection
+            color_analysis = enhance_existing_color_detection_ultra(image_path)
             
-            if color_analysis.get('error'):
-                # Fallback to basic enhanced color detection
-                color_analysis = enhance_existing_color_detection(image_path)
+            if color_analysis.get('error') or not color_analysis.get('success'):
+                # Fallback to advanced color detection
+                color_analysis = enhance_existing_color_detection_advanced(image_path)
                 
                 if color_analysis.get('error'):
-                    # Final fallback to original method
-                    return _extract_detailed_color_info_fallback(image_path)
+                    # Fallback to basic enhanced color detection
+                    color_analysis = enhance_existing_color_detection(image_path)
+                    
+                    if color_analysis.get('error'):
+                        # Try fast color detection
+                        color_analysis = enhance_existing_color_detection_fast(image_path)
+                        
+                        if color_analysis.get('error'):
+                            # Final fallback to original method
+                            return _extract_detailed_color_info_fallback(image_path)
         
         # Handle different color analysis formats
         if color_analysis.get('primary_colors'):
@@ -1281,6 +1435,9 @@ def extract_detailed_color_info(image_path):
             primary = primary_colors[0] if primary_colors else None
             secondary = primary_colors[1] if len(primary_colors) > 1 else None
             
+            # Extract color names from named_palette
+            color_names = [p.get('name', 'unknown') for p in named_palette] if named_palette else []
+            
             return {
                 'primary_color': primary.get('rgb', [0, 0, 0]) if primary else [0, 0, 0],
                 'primary_rgb': primary.get('rgb', [0, 0, 0]) if primary else [0, 0, 0],
@@ -1288,7 +1445,7 @@ def extract_detailed_color_info(image_path):
                 'secondary_rgb': secondary.get('rgb', None) if secondary else None,
                 'color_palette': [color.get('rgb', [0, 0, 0]) for color in all_colors[:8]],
                 'named_palette': named_palette,
-                'color_names': [p.get('name','unknown') for p in named_palette] if named_palette else [],
+                'color_names': color_names,
                 'primary_color_name': named_palette[0]['name'] if named_palette else rgb_to_name(primary.get('rgb', (0,0,0))) if primary else 'unknown',
                 'secondary_color_name': named_palette[1]['name'] if named_palette and len(named_palette) > 1 else (rgb_to_name(secondary.get('rgb')) if secondary else ''),
                 'enhanced_analysis': color_analysis,  # Store full analysis for advanced features
@@ -1421,14 +1578,16 @@ def estimate_detailed_size(detected_objects, image_path):
         return {}
 
 def estimate_material(detected_objects, image_path):
-    """Estimate material based on detected objects and image analysis."""
+    """Estimate material based on detected objects and image analysis with improved accuracy."""
     try:
         if not detected_objects:
             return {'material': 'unknown', 'confidence': 0.0}
         
-        # Material mapping based on object classes
+        # Enhanced material mapping based on object classes with better accuracy
         material_mapping = {
             'cell phone': ['plastic', 'glass', 'metal'],
+            'phone': ['plastic', 'glass', 'metal'],
+            'mobile': ['plastic', 'glass', 'metal'],
             'laptop': ['plastic', 'metal', 'glass'],
             'book': ['paper', 'cardboard'],
             'backpack': ['fabric', 'plastic', 'leather'],
@@ -1439,13 +1598,38 @@ def estimate_material(detected_objects, image_path):
             'bicycle': ['metal', 'plastic'],
             'shirt': ['cotton', 'polyester', 'fabric'],
             'pants': ['cotton', 'denim', 'fabric'],
-            'shoes': ['leather', 'fabric', 'rubber']
+            'shoes': ['leather', 'fabric', 'rubber'],
+            'tumbler': ['stainless steel', 'metal', 'plastic'],  # Improved for vacuum bottles
+            'bottle': ['stainless steel', 'metal', 'plastic', 'glass'],  # Better bottle material detection
+            'mouse': ['plastic', 'metal', 'rubber'],  # Gaming mice materials
+            'computer mouse': ['plastic', 'metal', 'rubber']
         }
         
         best_obj = max(detected_objects, key=lambda x: x.get('confidence', 0.0))
         obj_class = best_obj.get('class', '').lower()
         
+        # Get possible materials for this object class
         possible_materials = material_mapping.get(obj_class, ['unknown'])
+        
+        # For bottles and tumblers, prioritize metallic materials if they appear to be vacuum bottles
+        if obj_class in ['bottle', 'tumbler']:
+            # Check if it looks like a vacuum bottle (metallic, cylindrical)
+            try:
+                from PIL import Image
+                import numpy as np
+                image = Image.open(image_path).convert('RGB')
+                img_array = np.array(image)
+                
+                # Simple heuristic: check for metallic appearance (high contrast, reflective surfaces)
+                gray = np.mean(img_array, axis=2)
+                contrast = np.std(gray)
+                
+                # If high contrast and appears metallic, prioritize metal materials
+                if contrast > 50:  # High contrast suggests metallic surface
+                    possible_materials = ['stainless steel', 'metal', 'plastic']
+                    
+            except Exception as e:
+                print(f"Error in material analysis: {e}")
         
         return {
             'material': possible_materials[0],  # Most likely material
@@ -1719,8 +1903,11 @@ def process_image():
                         print(f"   🧠 RNN: {type(image_rnn_analyzer).__name__}")
                         print(f"   📝 BERT: {type(text_analyzer).__name__}")
                         
+                        # Get accurate color detection results first
+                        enhanced_color_info = extract_detailed_color_info(temp_path)
+                        
                         result[0] = enhanced_image_processor.process_image_comprehensive(
-                            temp_path, object_detector, image_rnn_analyzer, text_analyzer
+                            temp_path, object_detector, image_rnn_analyzer, text_analyzer, enhanced_color_info
                         )
                         print(f"   ✅ THREAD: Integrated analysis completed successfully")
                     except Exception as e:

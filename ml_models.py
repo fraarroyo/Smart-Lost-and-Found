@@ -14,6 +14,7 @@ from datetime import datetime
 import pickle
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
+from gdrive_model_downloader import get_model_path, ensure_model_available
 import joblib
 
 class UnifiedModel:
@@ -54,20 +55,9 @@ class UnifiedModel:
         self.checkpoint_model = None
         self.load_checkpoint_model()
         
-        # Enhanced class names with specific smartphone features (COCO fallback)
+        # Custom model classes - will be populated from best_model1.pth
         self.classes = [
-            'N/A', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-            'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
-            'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-            'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
-            'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-            'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-            'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-            'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
-            'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
-            'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
-            'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
-            'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+            'background', 'Mouse', 'phone', 'tumbler', 'wallet'
         ]
         
         # Dynamic COCO category mappings (from dataset annotations when available)
@@ -174,36 +164,24 @@ class UnifiedModel:
                 raise e
 
     def _load_trained_detector_or_default(self):
-        """Load a FasterRCNN detector. If USE_WEB_DETECTOR is set, always use COCO web weights."""
+        """Load best_model9.pth as the primary detector, with minimal fallback."""
         try:
-            # If flagged, force using web (COCO) detector and ignore checkpoints
-            if str(os.getenv('USE_WEB_DETECTOR', '')).lower() in ['1', 'true', 'yes']:
-                try:
-                    weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
-                except Exception:
-                    weights = None
-                model = fasterrcnn_resnet50_fpn(weights=weights, box_score_thresh=self.score_threshold)
-                self.logger.info("Using web (COCO) detector as requested via USE_WEB_DETECTOR")
-                return model
-
-            # Use best_model1.pth as the primary model
+            # Primary: Try to load best_model9.pth
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            best_model_1 = os.path.join(base_dir, 'best_model1.pth')
-            ckpt_path = os.getenv('BEST_MODEL1', best_model_1)
-
-            # Build model with torchvision weights and configured score threshold
-            weights = None
-            try:
-                weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
-            except Exception:
-                weights = None
-            model = fasterrcnn_resnet50_fpn(weights=weights, box_score_thresh=self.score_threshold)
-
-            if ckpt_path and os.path.exists(ckpt_path):
-                ckpt = torch.load(ckpt_path, map_location=self.device)
-                # Expecting a dict with keys 'model', 'num_classes', 'label_names'
+            best_model_path = os.path.join(base_dir, 'models', 'best_model9.pth')
+            
+            # Check if best_model9.pth exists
+            if os.path.exists(best_model_path):
+                self.logger.info(f"Loading best_model9.pth from {best_model_path}")
+                
+                # Load the checkpoint
+                ckpt = torch.load(best_model_path, map_location=self.device)
+                
+                # Extract model information
                 num_classes = ckpt.get('num_classes')
                 label_names = ckpt.get('label_names', {})
+                
+                # Process label names
                 if isinstance(label_names, dict):
                     # keys may be tensors; normalize to int
                     self.label_names = {int(k): v for k, v in label_names.items()}
@@ -213,31 +191,64 @@ class UnifiedModel:
                 elif isinstance(label_names, list):
                     self.label_names = {i: n for i, n in enumerate(label_names)}
                 else:
-                    self.label_names = {}
-
+                    # Default label names for lost and found items
+                    self.label_names = {
+                        0: 'background',
+                        1: 'lost_item',
+                        2: 'found_item'
+                    }
+                
+                # Build model architecture
+                model = fasterrcnn_resnet50_fpn(weights=None, box_score_thresh=self.score_threshold)
+                
                 # Replace predictor head to match checkpoint classes
                 in_features = model.roi_heads.box_predictor.cls_score.in_features
                 if num_classes is None:
                     if self.label_names:
                         num_classes = max(self.label_names.keys()) + 1
                     else:
-                        raise ValueError('num_classes missing in checkpoint and cannot be inferred')
+                        num_classes = 3  # background + lost + found
+                
                 model.roi_heads.box_predictor = FastRCNNPredictor(in_features, int(num_classes))
-
-                state_dict = ckpt['model'] if 'model' in ckpt else ckpt
-                model.load_state_dict(state_dict, strict=True)
-                self.logger.info(f"Loaded trained detector from {ckpt_path} with {int(num_classes)} classes")
+                
+                # Load the trained weights
+                state_dict = ckpt.get('model_state_dict', ckpt.get('model', ckpt))
+                model.load_state_dict(state_dict, strict=False)  # Use strict=False for compatibility
+                
+                self.logger.info(f"Successfully loaded best_model9.pth with {int(num_classes)} classes")
                 return model
-
-            # Fallback: COCO-pretrained model
-            self.logger.warning(f"best_model1.pth not found at {ckpt_path}; using COCO-pretrained model")
-            return model
+            
+            else:
+                # Fallback: Create a basic model without COCO weights
+                self.logger.warning(f"best_model9.pth not found at {best_model_path}")
+                self.logger.info("Creating basic FasterRCNN model without COCO weights")
+                
+                # Create model without pretrained weights
+                model = fasterrcnn_resnet50_fpn(weights=None, box_score_thresh=self.score_threshold)
+                
+                # Set up basic classes for lost and found
+                self.label_names = {
+                    0: 'background',
+                    1: 'lost_item', 
+                    2: 'found_item'
+                }
+                
+                # Configure predictor for 3 classes
+                in_features = model.roi_heads.box_predictor.cls_score.in_features
+                model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 3)
+                
+                self.logger.info("Created basic model with 3 classes (background, lost_item, found_item)")
+                return model
+                
         except Exception as e:
-            self.logger.error(f"Failed to load trained detector, using default COCO model: {e}")
-            try:
-                return fasterrcnn_resnet50_fpn(pretrained=True)
-            except Exception:
-                return fasterrcnn_resnet50_fpn()
+            self.logger.error(f"Failed to load best_model9.pth: {e}")
+            # Last resort: create minimal model
+            self.logger.info("Creating minimal model as last resort")
+            model = fasterrcnn_resnet50_fpn(weights=None, box_score_thresh=self.score_threshold)
+            self.label_names = {0: 'background', 1: 'item'}
+            in_features = model.roi_heads.box_predictor.cls_score.in_features
+            model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 2)
+            return model
 
     def _load_coco_categories_from_annotations(self):
         """Attempt to load COCO categories from an annotation JSON specified via env or default dataset.
@@ -556,15 +567,24 @@ class UnifiedModel:
             # Get detected objects with unified confidence adjustment
             detected_objects = []
             for box, score, label in zip(boxes, scores, labels):
-                # Determine class name from trained labels if available, else COCO fallback
+                # Determine class name from trained labels if available
                 obj_class = None
                 if self.label_names:
                     obj_class = self.label_names.get(int(label))
-                if not obj_class:
+                
+                # Map custom model classes to expected object types
+                if obj_class in ['lost_item', 'found_item']:
+                    # For lost/found items, we need to determine the actual object type
+                    # This would typically be done by additional analysis or user input
+                    # For now, we'll use a generic "item" class
+                    obj_class = 'item'
+                elif not obj_class:
+                    # Fallback to custom model classes
                     try:
                         obj_class = self.classes[int(label)]
                     except Exception:
-                        obj_class = str(int(label))
+                        obj_class = 'item'
+                
                 original_confidence = float(score)
                 
                 # Apply unified confidence adjustment

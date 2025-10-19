@@ -59,7 +59,7 @@ class EnhancedImageProcessor:
                       'minimalist', 'decorative']
         }
         
-    def process_image_comprehensive(self, image_path: str, object_detector, rnn_analyzer, text_analyzer) -> Dict:
+    def process_image_comprehensive(self, image_path: str, object_detector, rnn_analyzer, text_analyzer, enhanced_color_info: Dict = None) -> Dict:
         """Process image using R-CNN, RNN, and optional BERT for comprehensive analysis"""
         try:
             print(f"[ENHANCED PROCESSING] Starting comprehensive analysis of {image_path}")
@@ -72,6 +72,19 @@ class EnhancedImageProcessor:
             # Step 2: RNN Image Detail Analysis
             print("   🧠 Step 2: RNN Image Detail Analysis...")
             rnn_results = self._rnn_analysis(image_path, rnn_analyzer)
+            
+            # Override RNN colors with enhanced color detection if available
+            if enhanced_color_info and enhanced_color_info.get('color_names'):
+                enhanced_colors = enhanced_color_info.get('color_names', [])
+                print(f"   🎨 Enhanced colors available: {enhanced_colors}")
+                if enhanced_colors:
+                    rnn_results['details']['colors'] = enhanced_colors[:3]  # Top 3 colors
+                    print(f"   🎨 Override: Using enhanced colors: {enhanced_colors[:3]}")
+                else:
+                    print(f"   🎨 No enhanced colors found in enhanced_color_info")
+            else:
+                print(f"   🎨 No enhanced_color_info or color_names available")
+            
             print(f"   ✅ RNN analysis completed with confidence {rnn_results.get('confidence', 0):.2f}")
             
             # Step 3: BERT Text Analysis (always run in comprehensive mode)
@@ -499,13 +512,40 @@ class EnhancedImageProcessor:
         return fused_identification
     
     def _fuse_attribute_analysis(self, rcnn_results: Dict, rnn_results: Dict, bert_results: Dict) -> Dict:
-        """Fuse attribute analysis from all models"""
+        """Fuse attribute analysis from all models with improved accuracy"""
         rnn_details = rnn_results.get('details', {})
         bert_keywords = bert_results.get('keyword_extraction', [])
         
+        # Get materials from RNN analysis
+        materials = rnn_details.get('materials', [])
+        
+        # Validate and improve material detection
+        if materials:
+            # Filter out obviously incorrect materials based on object type
+            detected_objects = rcnn_results.get('objects', [])
+            if detected_objects:
+                best_obj = max(detected_objects, key=lambda x: x.get('confidence', 0))
+                obj_class = best_obj.get('class', '').lower()
+                
+                # Material validation based on object type
+                if obj_class in ['bottle', 'tumbler']:
+                    # For bottles/tumblers, prioritize metallic materials
+                    metallic_materials = ['stainless steel', 'metal', 'steel', 'aluminum']
+                    if any(mat in metallic_materials for mat in materials):
+                        # Keep metallic materials, remove non-metallic ones
+                        materials = [mat for mat in materials if mat in metallic_materials or mat in ['plastic', 'glass']]
+                    else:
+                        # If no metallic materials detected, add them as possibilities
+                        materials = ['stainless steel'] + materials[:2]
+                
+                elif obj_class in ['mouse', 'computer mouse']:
+                    # For mice, prioritize appropriate materials
+                    mouse_materials = ['plastic', 'metal', 'rubber']
+                    materials = [mat for mat in materials if mat in mouse_materials] or ['plastic']
+        
         fused_attributes = {
             'colors': rnn_details.get('colors', []),
-            'materials': rnn_details.get('materials', []),
+            'materials': materials,
             'condition': rnn_details.get('condition', 'unknown'),
             'size': rnn_details.get('size', 'unknown'),
             'brands': rnn_details.get('brands', []),
@@ -516,19 +556,44 @@ class EnhancedImageProcessor:
         return fused_attributes
     
     def _fuse_confidence_scores(self, rcnn_results: Dict, rnn_results: Dict, bert_results: Dict) -> Dict:
-        """Fuse confidence scores from all models"""
+        """Fuse confidence scores from all models with improved accuracy assessment"""
         rcnn_conf = rcnn_results.get('object_confidence', 0)
         rnn_conf = rnn_results.get('confidence', 0)
         bert_conf = bert_results.get('text_confidence', 0)
         
-        # Weighted average (R-CNN: 40%, RNN: 40%, BERT: 20%)
-        overall_confidence = (rcnn_conf * 0.4 + rnn_conf * 0.4 + bert_conf * 0.2)
+        # Adjust confidence based on consistency between models
+        detected_objects = rcnn_results.get('objects', [])
+        rnn_details = rnn_results.get('details', {})
+        
+        # Check for consistency between object detection and RNN analysis
+        consistency_penalty = 0.0
+        if detected_objects and rnn_details:
+            best_obj = max(detected_objects, key=lambda x: x.get('confidence', 0))
+            obj_class = best_obj.get('class', '').lower()
+            
+            # Check if RNN analysis is consistent with detected object
+            rnn_materials = rnn_details.get('materials', [])
+            if obj_class in ['bottle', 'tumbler'] and rnn_materials:
+                # If bottle/tumbler but RNN says cardboard, apply penalty
+                if 'cardboard' in rnn_materials or 'paper' in rnn_materials:
+                    consistency_penalty = 0.3  # 30% penalty for inconsistent material detection
+            
+            elif obj_class in ['mouse', 'computer mouse'] and rnn_materials:
+                # If mouse but RNN says something inappropriate, apply penalty
+                inappropriate_materials = ['cardboard', 'paper', 'fabric']
+                if any(mat in inappropriate_materials for mat in rnn_materials):
+                    consistency_penalty = 0.2  # 20% penalty for inappropriate material detection
+        
+        # Weighted average with consistency adjustment
+        base_confidence = (rcnn_conf * 0.4 + rnn_conf * 0.4 + bert_conf * 0.2)
+        overall_confidence = max(0.1, base_confidence - consistency_penalty)  # Minimum 10% confidence
         
         return {
             'rcnn_confidence': rcnn_conf,
             'rnn_confidence': rnn_conf,
             'bert_confidence': bert_conf,
-            'overall_confidence': overall_confidence
+            'overall_confidence': overall_confidence,
+            'consistency_penalty': consistency_penalty
         }
     
     def _fuse_semantic_understanding(self, rnn_results: Dict, bert_results: Dict) -> Dict:
